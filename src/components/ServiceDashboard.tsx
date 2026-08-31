@@ -32,10 +32,12 @@ import {
   PhoneCall,
   UserPlus,
   UtensilsCrossed,
-  MapPin
+  MapPin,
+  BookOpen
 } from 'lucide-react';
 import { Booking, BookingStatus, VenueSettings, DayCapacitySummary, ShiftOverride } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
+import { StaffHelpManualModal } from './StaffHelpManualModal';
 import { 
   getTodayUKFormatted, 
   addDaysUK, 
@@ -75,6 +77,7 @@ export function ServiceDashboard({
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isBlackoutModalOpen, setIsBlackoutModalOpen] = useState<boolean>(false);
   const [isFutureListOpen, setIsFutureListOpen] = useState<boolean>(false);
+  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
   // Blackout form state
   const [blackoutDate, setBlackoutDate] = useState<string>(selectedDate);
@@ -529,6 +532,16 @@ export function ServiceDashboard({
                 <Layers className="w-4 h-4 text-red-400" /> {futureBlackouts.length} Closed
               </button>
             )}
+
+            {/* Staff Operations Help Manual */}
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              className="min-h-[42px] px-3 bg-neutral-800 hover:bg-neutral-750 text-emerald-300 font-semibold rounded-xl text-xs border border-emerald-500/30 transition flex items-center gap-1.5 cursor-pointer"
+              title="Open Staff Operations & User Manual"
+            >
+              <BookOpen className="w-4 h-4 text-emerald-400" /> Staff Manual
+            </button>
 
             {/* Master Kill Switch */}
             <button
@@ -1546,6 +1559,12 @@ export function ServiceDashboard({
           </div>
         </div>
       )}
+
+      {/* STAFF OPERATIONS HELP MANUAL MODAL */}
+      <StaffHelpManualModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+      />
     </div>
   );
 }
