@@ -28,7 +28,11 @@ import {
   Unlock, 
   Layers, 
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  PhoneCall,
+  UserPlus,
+  UtensilsCrossed,
+  MapPin
 } from 'lucide-react';
 import { Booking, BookingStatus, VenueSettings, DayCapacitySummary, ShiftOverride } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
@@ -83,6 +87,21 @@ export function ServiceDashboard({
   const [walkInService, setWalkInService] = useState<'lunch' | 'dinner'>('dinner');
   const [walkInTime, setWalkInTime] = useState<string>('18:00');
   const [walkInNotes, setWalkInNotes] = useState<string>('');
+
+  // Staff Phone / Advanced Booking state
+  const [isStaffBookingModalOpen, setIsStaffBookingModalOpen] = useState<boolean>(false);
+  const [staffBookingDate, setStaffBookingDate] = useState<string>(selectedDate);
+  const [staffBookingTime, setStaffBookingTime] = useState<string>('19:00');
+  const [staffBookingService, setStaffBookingService] = useState<'lunch' | 'dinner'>('dinner');
+  const [staffBookingCovers, setStaffBookingCovers] = useState<number>(2);
+  const [staffGuestName, setStaffGuestName] = useState<string>('');
+  const [staffGuestPhone, setStaffGuestPhone] = useState<string>('');
+  const [staffGuestEmail, setStaffGuestEmail] = useState<string>('');
+  const [staffTableArea, setStaffTableArea] = useState<string>('Main Dining');
+  const [staffDietaryNotes, setStaffDietaryNotes] = useState<string>('');
+  const [staffIsDogFriendly, setStaffIsDogFriendly] = useState<boolean>(false);
+  const [staffIsHighchair, setStaffIsHighchair] = useState<boolean>(false);
+  const [staffStatus, setStaffStatus] = useState<BookingStatus>('confirmed');
 
   // Pacing settings editor state
   const [editedPaceCap, setEditedPaceCap] = useState<number>(venueSettings.maxCoversPer15Mins);
@@ -263,6 +282,59 @@ export function ServiceDashboard({
     triggerNotice(`Walk-in guest (${walkInCovers} covers) seated for ${selectedDate}`);
   };
 
+  // Handle Staff / Phone Reservation Submission
+  const handleCreateStaffBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!staffGuestName.trim()) {
+      triggerNotice('⚠️ Guest Full Name is required');
+      return;
+    }
+
+    const targetDate = staffBookingDate.trim() || selectedDate;
+    const phoneVal = staffGuestPhone.trim() || '+44 7000 000000';
+
+    const specialDetails = [
+      staffDietaryNotes.trim() ? `Dietary: ${staffDietaryNotes.trim()}` : '',
+      staffTableArea ? `Table: ${staffTableArea}` : ''
+    ].filter(Boolean).join(' • ');
+
+    const newBooking = await bookingService.createBooking({
+      uid: 'user_foh_staff',
+      venueId: 'venue_uk_01',
+      date: targetDate,
+      timeSlot: staffBookingTime,
+      covers: Number(staffBookingCovers),
+      service: staffBookingService,
+      customer: {
+        fullName: staffGuestName.trim(),
+        email: staffGuestEmail.trim() || 'phone-booking@venue.local',
+        phone: phoneVal,
+        dietaryRequirements: specialDetails || undefined,
+        isDogFriendlyRequested: staffIsDogFriendly,
+        isHighchairRequested: staffIsHighchair
+      },
+      status: staffStatus,
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: false,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    setIsStaffBookingModalOpen(false);
+    // Reset form
+    setStaffGuestName('');
+    setStaffGuestPhone('');
+    setStaffGuestEmail('');
+    setStaffDietaryNotes('');
+    setStaffIsDogFriendly(false);
+    setStaffIsHighchair(false);
+
+    handleSelectDate(targetDate);
+    onBookingsUpdated();
+    triggerNotice(`✅ Staff Reservation #${newBooking.id} created for ${staffGuestName} (${staffBookingCovers} covers) on ${targetDate}`);
+  };
+
   // Handle Save Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -412,13 +484,26 @@ export function ServiceDashboard({
               <span>{showMonthGrid ? 'Hide Calendar' : 'Month Calendar'}</span>
             </button>
 
+            {/* Take Phone / Staff Table Reservation Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setStaffBookingDate(selectedDate);
+                setIsStaffBookingModalOpen(true);
+              }}
+              className="min-h-[42px] px-3.5 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40"
+              title="Take telephone or in-person advance reservation"
+            >
+              <PhoneCall className="w-4 h-4 text-neutral-950" /> + Take Phone / Table Booking
+            </button>
+
             {/* Fast Walk-In Button */}
             <button
               type="button"
               onClick={() => setIsWalkInOpen(true)}
-              className="min-h-[42px] px-3.5 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40"
+              className="min-h-[42px] px-3.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-bold rounded-xl text-xs border border-white/10 transition flex items-center gap-1.5 cursor-pointer"
             >
-              <Plus className="w-4 h-4" /> Walk-In Add
+              <Plus className="w-4 h-4" /> Fast Walk-In
             </button>
 
             {/* Shift Blackout Creator */}
@@ -1197,6 +1282,265 @@ export function ServiceDashboard({
                 className="w-full min-h-[50px] bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50"
               >
                 <UserCheck className="w-4 h-4" /> Tap 3: Confirm & Seat Walk-In ({walkInCovers} covers)
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* STAFF PHONE & ADVANCE TABLE RESERVATION MODAL */}
+      {isStaffBookingModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-white/15 rounded-2xl max-w-xl w-full p-6 sm:p-7 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-700 flex items-center justify-center text-emerald-400 shrink-0">
+                  <PhoneCall className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    Take Telephone / Staff Reservation
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Direct staff table booking (bypasses guest pacing caps)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsStaffBookingModalOpen(false)}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStaffBooking} className="space-y-4">
+              {/* Row 1: Date & Time & Service */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    Date (DD/MM/YYYY) *
+                  </label>
+                  <div className="relative">
+                    <CalendarIcon className="w-4 h-4 text-emerald-400 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      required
+                      value={staffBookingDate}
+                      onChange={(e) => setStaffBookingDate(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      className="w-full min-h-[40px] pl-9 pr-3 bg-neutral-950 border border-white/15 rounded-xl text-xs font-mono text-white focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    Service *
+                  </label>
+                  <select
+                    value={staffBookingService}
+                    onChange={(e) => {
+                      const s = e.target.value as 'lunch' | 'dinner';
+                      setStaffBookingService(s);
+                      if (s === 'lunch' && Number(staffBookingTime.split(':')[0]) >= 16) {
+                        setStaffBookingTime('12:30');
+                      } else if (s === 'dinner' && Number(staffBookingTime.split(':')[0]) < 16) {
+                        setStaffBookingTime('19:00');
+                      }
+                    }}
+                    className="w-full min-h-[40px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
+                  >
+                    <option value="lunch">Lunch Service (12:00 - 15:00)</option>
+                    <option value="dinner">Dinner Service (17:30 - 22:00)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    Arrival Time *
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={staffBookingTime}
+                    onChange={(e) => setStaffBookingTime(e.target.value)}
+                    className="w-full min-h-[40px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Party Size (Covers) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-neutral-200">
+                    Party Size (Covers) *
+                  </label>
+                  <span className="text-xs text-emerald-400 font-bold">
+                    {staffBookingCovers} {staffBookingCovers === 1 ? 'Guest' : 'Guests'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setStaffBookingCovers(num)}
+                      className={`min-h-[38px] px-3 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                        staffBookingCovers === num
+                          ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-md'
+                          : 'bg-neutral-950 text-neutral-300 border-white/10 hover:bg-neutral-800'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Guest Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    Lead Guest Name *
+                  </label>
+                  <div className="relative">
+                    <UserCheck className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      required
+                      value={staffGuestName}
+                      onChange={(e) => setStaffGuestName(e.target.value)}
+                      placeholder="e.g. Lord & Lady Hamilton"
+                      className="w-full min-h-[40px] pl-9 pr-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    UK Contact Phone Number *
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                    <input
+                      type="tel"
+                      value={staffGuestPhone}
+                      onChange={(e) => setStaffGuestPhone(e.target.value)}
+                      placeholder="07700 900123 or 01643 863288"
+                      className="w-full min-h-[40px] pl-9 pr-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 4: Table / Seating Area & Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    Seating Area / Table Allocation
+                  </label>
+                  <div className="relative">
+                    <MapPin className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                    <select
+                      value={staffTableArea}
+                      onChange={(e) => setStaffTableArea(e.target.value)}
+                      className="w-full min-h-[40px] pl-9 pr-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
+                    >
+                      <option value="Main Dining Room">Main Dining Room</option>
+                      <option value="Snug / Fireplace Area">Snug / Fireplace Area</option>
+                      <option value="Bar Area">Bar Area (High Tops)</option>
+                      <option value="Garden & Terrace">Garden & Terrace</option>
+                      <option value="Window Table">Window Table</option>
+                      <option value="Private Dining">Private Dining Room</option>
+                      <option value="Table 1">Table 1 (2 Covers)</option>
+                      <option value="Table 2">Table 2 (4 Covers)</option>
+                      <option value="Table 3">Table 3 (4 Covers)</option>
+                      <option value="Table 4">Table 4 (6 Covers)</option>
+                      <option value="Table 12">Table 12 (Large Booth)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                    Guest Email (Optional for confirmations)
+                  </label>
+                  <input
+                    type="email"
+                    value={staffGuestEmail}
+                    onChange={(e) => setStaffGuestEmail(e.target.value)}
+                    placeholder="guest@example.co.uk"
+                    className="w-full min-h-[40px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              {/* Row 5: Dietary / Allergies / Special Requests */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                  Dietary Requirements & Kitchen Notes
+                </label>
+                <input
+                  type="text"
+                  value={staffDietaryNotes}
+                  onChange={(e) => setStaffDietaryNotes(e.target.value)}
+                  placeholder="e.g. 1x Gluten Free, 1x Nut Allergy, VIP regular guest"
+                  className="w-full min-h-[40px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white placeholder-neutral-500 focus:border-emerald-400"
+                />
+              </div>
+
+              {/* Checkboxes: Dog Friendly / Highchair / Status */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/10">
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={staffIsDogFriendly}
+                      onChange={(e) => setStaffIsDogFriendly(e.target.checked)}
+                      className="w-4 h-4 accent-amber-500 rounded border-neutral-700 bg-neutral-950"
+                    />
+                    <span className="flex items-center gap-1">
+                      <Dog className="w-3.5 h-3.5 text-amber-400" /> Dog Friendly
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={staffIsHighchair}
+                      onChange={(e) => setStaffIsHighchair(e.target.checked)}
+                      className="w-4 h-4 accent-sky-500 rounded border-neutral-700 bg-neutral-950"
+                    />
+                    <span className="flex items-center gap-1">
+                      <Baby className="w-3.5 h-3.5 text-sky-400" /> Highchair
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-400 font-semibold">Status:</span>
+                  <select
+                    value={staffStatus}
+                    onChange={(e) => setStaffStatus(e.target.value as BookingStatus)}
+                    className="min-h-[34px] px-2.5 bg-neutral-950 border border-white/15 rounded-lg text-xs font-bold text-emerald-400"
+                  >
+                    <option value="confirmed">Confirmed</option>
+                    <option value="seated">Seated Now</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                className="w-full min-h-[50px] bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black rounded-xl text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50 mt-3"
+              >
+                <Check className="w-5 h-5" /> Save Reservation & Place on Run Sheet ({staffBookingCovers} Covers)
               </button>
             </form>
           </div>
