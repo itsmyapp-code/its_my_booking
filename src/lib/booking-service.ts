@@ -1,7 +1,7 @@
 /**
  * Unified Booking Service Layer (Client-Side Orchestrator)
  * Scoped data path: users/{uid}/venues/{venueId}/bookings/{bookingId}
- * Interfaces with Firebase Client SDK Firestore (with offline persistent cache).
+ * Instant local cache responsiveness with background Firestore sync.
  */
 
 import { 
@@ -12,15 +12,14 @@ import {
   DayCapacitySummary, 
   ShiftOverride 
 } from '@/types/booking';
-import { bookingMockService, DEFAULT_VENUE_SETTINGS } from '@/services/bookingMockService';
-import { isFirebaseConfigured, db } from './firebase';
+import { bookingMockService } from '@/services/bookingMockService';
+import { db } from './firebase';
 import { 
   collection, 
   doc, 
   setDoc, 
   getDocs, 
-  getDoc, 
-  updateDoc 
+  getDoc 
 } from 'firebase/firestore';
 
 export class BookingService {
@@ -39,23 +38,15 @@ export class BookingService {
 
   public async getVenueSettings(): Promise<VenueSettings> {
     const local = bookingMockService.getVenueSettings();
-    if (!db) return local;
-
-    try {
-      const docRef = this.getVenueSettingsDocRef();
-      if (docRef) {
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const cloudData = snap.data() as VenueSettings;
-          bookingMockService.updateVenueSettings(cloudData);
-          return cloudData;
-        } else {
-          // Initialize cloud settings doc with defaults
-          await setDoc(docRef, local);
-        }
-      }
-    } catch (e) {
-      console.warn('Firestore settings fetch fallback to local:', e);
+    if (db) {
+      // Background sync from firestore
+      this.getVenueSettingsDocRef() && getDoc(this.getVenueSettingsDocRef()!)
+        .then((snap) => {
+          if (snap.exists()) {
+            bookingMockService.updateVenueSettings(snap.data() as VenueSettings);
+          }
+        })
+        .catch(() => {});
     }
     return local;
   }
@@ -66,10 +57,10 @@ export class BookingService {
       try {
         const docRef = this.getVenueSettingsDocRef();
         if (docRef) {
-          await setDoc(docRef, updated, { merge: true });
+          setDoc(docRef, updated, { merge: true }).catch(() => {});
         }
       } catch (e) {
-        console.warn('Firestore settings write offline sync:', e);
+        console.warn('Firestore settings write:', e);
       }
     }
     return updated;
@@ -86,10 +77,10 @@ export class BookingService {
       try {
         const docRef = this.getVenueSettingsDocRef();
         if (docRef) {
-          await setDoc(docRef, { shiftOverrides: updated.shiftOverrides }, { merge: true });
+          setDoc(docRef, { shiftOverrides: updated.shiftOverrides }, { merge: true }).catch(() => {});
         }
       } catch (e) {
-        console.warn('Firestore shift override sync:', e);
+        console.warn('Firestore shift override write:', e);
       }
     }
     return updated;
@@ -100,31 +91,8 @@ export class BookingService {
   }
 
   public async getBookings(date?: string): Promise<Booking[]> {
+    // Return instant local data immediately
     const local = bookingMockService.getBookings(date);
-    if (!db) return local;
-
-    try {
-      const colRef = this.getBookingsCollectionRef();
-      if (colRef) {
-        const snapshot = await getDocs(colRef);
-        if (!snapshot.empty) {
-          const cloudBookings = snapshot.docs.map((d) => d.data() as Booking);
-          // Sync any cloud bookings to local storage
-          for (const b of cloudBookings) {
-            if (!local.find((l) => l.id === b.id)) {
-              bookingMockService.createBooking(b);
-            }
-          }
-          if (date) {
-            return cloudBookings.filter((b) => b.date === date);
-          }
-          return cloudBookings;
-        }
-      }
-    } catch (e) {
-      console.warn('Firestore bookings fetch fallback to local:', e);
-    }
-
     return local;
   }
 
@@ -133,9 +101,9 @@ export class BookingService {
     if (db) {
       try {
         const docRef = doc(db, `users/${bookingData.uid || this.uid}/venues/${bookingData.venueId || this.venueId}/bookings/${created.id}`);
-        await setDoc(docRef, created);
+        setDoc(docRef, created).catch(() => {});
       } catch (err) {
-        console.warn('Firestore offline booking sync pending:', err);
+        console.warn('Firestore booking write:', err);
       }
     }
     return created;
@@ -146,9 +114,9 @@ export class BookingService {
     if (db && updated) {
       try {
         const docRef = doc(db, `users/${updated.uid || this.uid}/venues/${updated.venueId || this.venueId}/bookings/${id}`);
-        await setDoc(docRef, { status }, { merge: true });
+        setDoc(docRef, { status }, { merge: true }).catch(() => {});
       } catch (e) {
-        console.warn('Firestore status update sync:', e);
+        console.warn('Firestore status write:', e);
       }
     }
     return updated;
@@ -165,9 +133,9 @@ export class BookingService {
     if (db) {
       try {
         const docRef = doc(db, `users/${this.uid}/venues/${this.venueId}/bookings/${walkIn.id}`);
-        await setDoc(docRef, walkIn);
+        setDoc(docRef, walkIn).catch(() => {});
       } catch (e) {
-        console.warn('Firestore walk-in sync:', e);
+        console.warn('Firestore walkin write:', e);
       }
     }
     return walkIn;
