@@ -1,5 +1,13 @@
-import { Booking, BookingStatus, VenueSettings, SlotAvailability, DayCapacitySummary, WeeklySchedule } from '@/types/booking';
-import { getTodayUKFormatted } from '@/lib/date-utils';
+import { 
+  Booking, 
+  BookingStatus, 
+  VenueSettings, 
+  SlotAvailability, 
+  DayCapacitySummary, 
+  WeeklySchedule,
+  ShiftOverride 
+} from '@/types/booking';
+import { getTodayUKFormatted, addDaysUK, parseUKDate, formatUKDate } from '@/lib/date-utils';
 
 const STORAGE_KEY_BOOKINGS = 'itsmybooking_bookings_data_v1';
 const STORAGE_KEY_SETTINGS = 'itsmybooking_venue_settings_v1';
@@ -76,13 +84,22 @@ export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
     depositRequired: false,
     depositAmountPerCover: 0,
     specialDietaryNotice: 'Please inform us of all allergies; our kitchen handles nuts, dairy, and gluten.'
-  }
+  },
+  shiftOverrides: {}
 };
 
+/**
+ * Generate multi-day realistic seed data across today, tomorrow, and upcoming days
+ */
 export function generateSeedBookings(): Booking[] {
   const today = getTodayUKFormatted();
-  
+  const tomorrow = addDaysUK(today, 1);
+  const day3 = addDaysUK(today, 2);
+  const day4 = addDaysUK(today, 3);
+  const day5 = addDaysUK(today, 4);
+
   return [
+    // Today's Bookings
     {
       id: 'BKG-UK-1001',
       uid: 'user_mock_01',
@@ -225,20 +242,22 @@ export function generateSeedBookings(): Booking[] {
         timestamp: new Date(Date.now() - 3600000 * 2).toISOString()
       }
     },
+
+    // Tomorrow's Bookings
     {
-      id: 'BKG-UK-1007',
+      id: 'BKG-UK-2001',
       uid: 'user_mock_01',
       venueId: 'venue_uk_01',
-      createdAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-      date: today,
-      timeSlot: '20:00',
+      createdAt: new Date().toISOString(),
+      date: tomorrow,
+      timeSlot: '12:30',
       covers: 4,
-      service: 'dinner',
+      service: 'lunch',
       customer: {
-        fullName: 'Oliver Bennett',
-        email: 'oliver.b@example.co.uk',
-        phone: '+44 7700 900234',
-        dietaryRequirements: 'Dairy intolerant',
+        fullName: 'Professor James Sterling',
+        email: 'j.sterling@example.co.uk',
+        phone: '+44 7700 900888',
+        dietaryRequirements: 'Halal',
         isDogFriendlyRequested: false,
         isHighchairRequested: false
       },
@@ -246,7 +265,154 @@ export function generateSeedBookings(): Booking[] {
       complianceConsent: {
         dataProcessingAgreed: true,
         marketingOptIn: true,
-        timestamp: new Date(Date.now() - 3600000 * 1).toISOString()
+        timestamp: new Date().toISOString()
+      }
+    },
+    {
+      id: 'BKG-UK-2002',
+      uid: 'user_mock_01',
+      venueId: 'venue_uk_01',
+      createdAt: new Date().toISOString(),
+      date: tomorrow,
+      timeSlot: '19:00',
+      covers: 6,
+      service: 'dinner',
+      customer: {
+        fullName: 'Lady Beatrice Howard',
+        email: 'b.howard@example.co.uk',
+        phone: '+44 7700 900999',
+        dietaryRequirements: '2x Coeliac',
+        isDogFriendlyRequested: true,
+        isHighchairRequested: false
+      },
+      status: 'confirmed',
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: false,
+        timestamp: new Date().toISOString()
+      }
+    },
+    {
+      id: 'BKG-UK-2003',
+      uid: 'user_mock_01',
+      venueId: 'venue_uk_01',
+      createdAt: new Date().toISOString(),
+      date: tomorrow,
+      timeSlot: '19:45',
+      covers: 2,
+      service: 'dinner',
+      customer: {
+        fullName: 'Marcus Thorne',
+        email: 'marcus.t@example.co.uk',
+        phone: '+44 7700 900222',
+        isDogFriendlyRequested: false,
+        isHighchairRequested: false
+      },
+      status: 'confirmed',
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: true,
+        timestamp: new Date().toISOString()
+      }
+    },
+
+    // Day 3 Bookings
+    {
+      id: 'BKG-UK-3001',
+      uid: 'user_mock_01',
+      venueId: 'venue_uk_01',
+      createdAt: new Date().toISOString(),
+      date: day3,
+      timeSlot: '13:00',
+      covers: 5,
+      service: 'lunch',
+      customer: {
+        fullName: 'The Henderson Family',
+        email: 'henderson@example.co.uk',
+        phone: '+44 7700 900333',
+        isDogFriendlyRequested: false,
+        isHighchairRequested: true
+      },
+      status: 'confirmed',
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: false,
+        timestamp: new Date().toISOString()
+      }
+    },
+    {
+      id: 'BKG-UK-3002',
+      uid: 'user_mock_01',
+      venueId: 'venue_uk_01',
+      createdAt: new Date().toISOString(),
+      date: day3,
+      timeSlot: '18:30',
+      covers: 4,
+      service: 'dinner',
+      customer: {
+        fullName: 'Rupert & Victoria Cole',
+        email: 'rv.cole@example.co.uk',
+        phone: '+44 7700 900444',
+        dietaryRequirements: 'Vegetarian',
+        isDogFriendlyRequested: true,
+        isHighchairRequested: false
+      },
+      status: 'confirmed',
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: true,
+        timestamp: new Date().toISOString()
+      }
+    },
+
+    // Day 4 Bookings
+    {
+      id: 'BKG-UK-4001',
+      uid: 'user_mock_01',
+      venueId: 'venue_uk_01',
+      createdAt: new Date().toISOString(),
+      date: day4,
+      timeSlot: '19:30',
+      covers: 6,
+      service: 'dinner',
+      customer: {
+        fullName: 'London Wine Society',
+        email: 'winesoc@example.co.uk',
+        phone: '+44 7700 900555',
+        dietaryRequirements: 'Tasting menu pairing',
+        isDogFriendlyRequested: false,
+        isHighchairRequested: false
+      },
+      status: 'confirmed',
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: false,
+        timestamp: new Date().toISOString()
+      }
+    },
+
+    // Day 5 Bookings
+    {
+      id: 'BKG-UK-5001',
+      uid: 'user_mock_01',
+      venueId: 'venue_uk_01',
+      createdAt: new Date().toISOString(),
+      date: day5,
+      timeSlot: '12:30',
+      covers: 6,
+      service: 'lunch',
+      customer: {
+        fullName: 'Sunday Roast Party (Evans)',
+        email: 'evans.sunday@example.co.uk',
+        phone: '+44 7700 900666',
+        isDogFriendlyRequested: true,
+        isHighchairRequested: true
+      },
+      status: 'confirmed',
+      complianceConsent: {
+        dataProcessingAgreed: true,
+        marketingOptIn: true,
+        timestamp: new Date().toISOString()
       }
     }
   ];
@@ -286,13 +452,13 @@ class BookingMockService {
         return DEFAULT_VENUE_SETTINGS;
       }
       const parsed = JSON.parse(raw);
-      // Merge with defaults to guarantee all nested properties exist
       return {
         ...DEFAULT_VENUE_SETTINGS,
         ...parsed,
         address: { ...DEFAULT_VENUE_SETTINGS.address, ...(parsed.address || {}) },
         schedule: { ...DEFAULT_WEEKLY_SCHEDULE, ...(parsed.schedule || {}) },
-        policies: { ...DEFAULT_VENUE_SETTINGS.policies, ...(parsed.policies || {}) }
+        policies: { ...DEFAULT_VENUE_SETTINGS.policies, ...(parsed.policies || {}) },
+        shiftOverrides: parsed.shiftOverrides || {}
       };
     } catch {
       return DEFAULT_VENUE_SETTINGS;
@@ -315,6 +481,10 @@ class BookingMockService {
       policies: {
         ...(current.policies || DEFAULT_VENUE_SETTINGS.policies),
         ...(settings.policies || {})
+      },
+      shiftOverrides: {
+        ...(current.shiftOverrides || {}),
+        ...(settings.shiftOverrides || {})
       }
     };
 
@@ -326,6 +496,40 @@ class BookingMockService {
       }
     }
     return updated;
+  }
+
+  /**
+   * Toggle Lunch or Dinner or All-Day closure for any specific date
+   */
+  public toggleShiftOverride(
+    dateUK: string, 
+    shift: 'lunch' | 'dinner' | 'allDay', 
+    isClosed: boolean, 
+    reason?: string
+  ): VenueSettings {
+    const current = this.getVenueSettings();
+    const existingOverride = current.shiftOverrides?.[dateUK] || {};
+
+    const updatedOverride: ShiftOverride = {
+      ...existingOverride,
+      ...(shift === 'lunch' ? { lunchClosed: isClosed } : {}),
+      ...(shift === 'dinner' ? { dinnerClosed: isClosed } : {}),
+      ...(shift === 'allDay' ? { allDayClosed: isClosed, lunchClosed: isClosed, dinnerClosed: isClosed } : {}),
+      reason: isClosed ? (reason || 'Service closed by Front of House') : (existingOverride.reason || ''),
+      updatedAt: new Date().toISOString()
+    };
+
+    const newOverrides = {
+      ...(current.shiftOverrides || {}),
+      [dateUK]: updatedOverride
+    };
+
+    return this.updateVenueSettings({ shiftOverrides: newOverrides });
+  }
+
+  public getShiftOverride(dateUK: string): ShiftOverride | null {
+    const settings = this.getVenueSettings();
+    return settings.shiftOverrides?.[dateUK] || null;
   }
 
   public getBookings(date?: string): Booking[] {
@@ -368,12 +572,18 @@ class BookingMockService {
     return all[index];
   }
 
-  public createWalkIn(covers: number, service: 'lunch' | 'dinner' | 'drinks', timeSlot: string, notes?: string): Booking {
-    const today = getTodayUKFormatted();
+  public createWalkIn(
+    covers: number, 
+    service: 'lunch' | 'dinner' | 'drinks', 
+    timeSlot: string, 
+    notes?: string,
+    date?: string
+  ): Booking {
+    const targetDate = date || getTodayUKFormatted();
     return this.createBooking({
       uid: 'user_foh_walkin',
       venueId: 'venue_uk_01',
-      date: today,
+      date: targetDate,
       timeSlot,
       covers,
       service,
@@ -395,6 +605,7 @@ class BookingMockService {
   public getDayMetrics(date: string): DayCapacitySummary {
     const bookings = this.getBookings(date).filter((b) => b.status !== 'cancelled');
     const settings = this.getVenueSettings();
+    const override = settings.shiftOverrides?.[date];
 
     const totalBookedCovers = bookings.reduce((sum, b) => sum + b.covers, 0);
     const seatedCovers = bookings.filter((b) => b.status === 'seated').reduce((sum, b) => sum + b.covers, 0);
@@ -409,7 +620,10 @@ class BookingMockService {
       seatedCovers,
       cancelledCovers,
       remainingLunchCapacity: Math.max(0, settings.maxCoversPerShift.lunch - lunchCovers),
-      remainingDinnerCapacity: Math.max(0, settings.maxCoversPerShift.dinner - dinnerCovers)
+      remainingDinnerCapacity: Math.max(0, settings.maxCoversPerShift.dinner - dinnerCovers),
+      isLunchClosed: !!override?.lunchClosed || !!override?.allDayClosed,
+      isDinnerClosed: !!override?.dinnerClosed || !!override?.allDayClosed,
+      closureReason: override?.reason
     };
   }
 
@@ -419,10 +633,18 @@ class BookingMockService {
       return [];
     }
 
+    const override = settings.shiftOverrides?.[date];
+    if (override?.allDayClosed) {
+      return [];
+    }
+
     const activeBookings = this.getBookings(date).filter((b) => b.status !== 'cancelled');
     const slots: SlotAvailability[] = [];
 
     const generateTimes = (startStr: string, endStr: string, service: 'lunch' | 'dinner') => {
+      const isShiftClosed = (service === 'lunch' && override?.lunchClosed) || 
+                            (service === 'dinner' && override?.dinnerClosed);
+
       const [startHour, startMin] = startStr.split(':').map(Number);
       const [endHour, endMin] = endStr.split(':').map(Number);
 
@@ -433,6 +655,20 @@ class BookingMockService {
         const hh = String(Math.floor(current / 60)).padStart(2, '0');
         const mm = String(current % 60).padStart(2, '0');
         const slotTime = `${hh}:${mm}`;
+
+        if (isShiftClosed) {
+          slots.push({
+            timeSlot: slotTime,
+            service,
+            currentCovers: 0,
+            maxCovers: settings.maxCoversPer15Mins,
+            remainingCapacity: 0,
+            isAvailable: false,
+            reason: override?.reason || `${service.toUpperCase()} service is closed for online bookings`
+          });
+          current += 15;
+          continue;
+        }
 
         const slotCovers = activeBookings
           .filter((b) => b.timeSlot === slotTime)

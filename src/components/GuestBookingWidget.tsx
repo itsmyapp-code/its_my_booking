@@ -461,6 +461,25 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
             </div>
           </div>
 
+          {/* Shift Blackout Notices for Selected Date */}
+          {venueSettings.shiftOverrides?.[selectedDate]?.lunchClosed && (
+            <div className="p-3 bg-red-950/60 border border-red-800/60 rounded-xl text-xs text-red-200 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>
+                <strong>Lunch Service Closed:</strong> {venueSettings.shiftOverrides[selectedDate]?.reason || 'Online reservations closed for lunch on this date.'}
+              </span>
+            </div>
+          )}
+
+          {venueSettings.shiftOverrides?.[selectedDate]?.dinnerClosed && (
+            <div className="p-3 bg-red-950/60 border border-red-800/60 rounded-xl text-xs text-red-200 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>
+                <strong>Dinner Service Closed:</strong> {venueSettings.shiftOverrides[selectedDate]?.reason || 'Online reservations closed for dinner on this date.'}
+              </span>
+            </div>
+          )}
+
           {/* Time Slot Matrix */}
           <div className="space-y-4 max-h-[340px] overflow-y-auto pr-1">
             {availableSlots.length === 0 ? (

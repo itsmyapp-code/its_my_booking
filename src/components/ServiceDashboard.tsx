@@ -15,17 +15,31 @@ import {
   Dog, 
   Baby, 
   AlertTriangle, 
-  Filter, 
   Flame, 
   CheckCircle2, 
-  RotateCcw,
-  Sliders,
+  Sliders, 
+  ChevronLeft, 
+  ChevronRight, 
+  CalendarDays, 
+  Ban, 
   Sparkles,
-  Phone
+  Phone,
+  Lock,
+  Unlock,
+  Layers,
+  AlertCircle
 } from 'lucide-react';
-import { Booking, BookingStatus, VenueSettings, DayCapacitySummary } from '@/types/booking';
+import { Booking, BookingStatus, VenueSettings, DayCapacitySummary, ShiftOverride } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
-import { getTodayUKFormatted } from '@/lib/date-utils';
+import { 
+  getTodayUKFormatted, 
+  addDaysUK, 
+  parseUKDate, 
+  formatUKDate, 
+  formatDateToLongUK, 
+  formatDateToDayName,
+  isTodayUK 
+} from '@/lib/date-utils';
 
 interface ServiceDashboardProps {
   initialBookings: Booking[];
@@ -45,9 +59,20 @@ export function ServiceDashboard({
   const [serviceFilter, setServiceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Calendar View Mode (compact bar vs full month grid)
+  const [showMonthGrid, setShowMonthGrid] = useState<boolean>(false);
+  const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
+
   // Modals
   const [isWalkInOpen, setIsWalkInOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isBlackoutModalOpen, setIsBlackoutModalOpen] = useState<boolean>(false);
+  const [isFutureListOpen, setIsFutureListOpen] = useState<boolean>(false);
+
+  // Blackout form state
+  const [blackoutShift, setBlackoutShift] = useState<'lunch' | 'dinner' | 'allDay'>('lunch');
+  const [blackoutReason, setBlackoutReason] = useState<string>('Private Event');
 
   // Walk-in form state
   const [walkInCovers, setWalkInCovers] = useState<number>(2);
@@ -55,10 +80,15 @@ export function ServiceDashboard({
   const [walkInTime, setWalkInTime] = useState<string>('18:00');
   const [walkInNotes, setWalkInNotes] = useState<string>('');
 
-  // Local settings editor
+  // Pacing settings editor state
   const [editedPaceCap, setEditedPaceCap] = useState<number>(venueSettings.maxCoversPer15Mins);
   const [editedLunchCap, setEditedLunchCap] = useState<number>(venueSettings.maxCoversPerShift.lunch);
   const [editedDinnerCap, setEditedDinnerCap] = useState<number>(venueSettings.maxCoversPerShift.dinner);
+
+  // Active date override info
+  const currentOverride: ShiftOverride | undefined = venueSettings.shiftOverrides?.[selectedDate];
+  const isLunchClosed = !!currentOverride?.lunchClosed || !!currentOverride?.allDayClosed;
+  const isDinnerClosed = !!currentOverride?.dinnerClosed || !!currentOverride?.allDayClosed;
 
   // Filter bookings for selected date & criteria
   const dayBookings = useMemo(() => {
@@ -87,12 +117,93 @@ export function ServiceDashboard({
     return bookingService.getDayMetrics(selectedDate);
   }, [selectedDate, initialBookings, venueSettings]);
 
+  // Quick navigation dates
+  const quickDatePills = useMemo(() => {
+    const today = getTodayUKFormatted();
+    const tomorrow = addDaysUK(today, 1);
+    const day3 = addDaysUK(today, 2);
+    const day4 = addDaysUK(today, 3);
+    const day5 = addDaysUK(today, 4);
+
+    return [
+      { label: 'Today', date: today },
+      { label: 'Tomorrow', date: tomorrow },
+      { label: formatDateToDayName(day3), date: day3 },
+      { label: formatDateToDayName(day4), date: day4 },
+      { label: formatDateToDayName(day5), date: day5 }
+    ];
+  }, []);
+
+  // Compute days for the month grid
+  const monthGridDays = useMemo(() => {
+    const firstDay = new Date(calendarYear, calendarMonth, 1);
+    const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const startingDayIndex = (firstDay.getDay() + 6) % 7; // Monday = 0
+
+    const days: { dateUK: string; dayNumber: number; isCurrentMonth: boolean }[] = [];
+
+    // Leading blanks
+    for (let i = 0; i < startingDayIndex; i++) {
+      days.push({ dateUK: '', dayNumber: 0, isCurrentMonth: false });
+    }
+
+    // Month days
+    for (let d = 1; d <= totalDays; d++) {
+      const dateObj = new Date(calendarYear, calendarMonth, d);
+      days.push({
+        dateUK: formatUKDate(dateObj),
+        dayNumber: d,
+        isCurrentMonth: true
+      });
+    }
+
+    return days;
+  }, [calendarYear, calendarMonth]);
+
+  // Future blackouts list
+  const futureBlackouts = useMemo(() => {
+    const overrides = venueSettings.shiftOverrides || {};
+    return Object.entries(overrides)
+      .filter(([_, ov]) => ov.lunchClosed || ov.dinnerClosed || ov.allDayClosed)
+      .map(([date, ov]) => ({ date, ...ov }));
+  }, [venueSettings.shiftOverrides]);
+
   // Handle Master Kill Switch
   const toggleMasterKillSwitch = async () => {
     const nextState = !venueSettings.isOnlineBookingEnabled;
     const updated = await bookingService.updateVenueSettings({
       isOnlineBookingEnabled: nextState
     });
+    onSettingsUpdated(updated);
+  };
+
+  // Handle Shift Blackout Toggle
+  const handleToggleShiftClosure = async (shift: 'lunch' | 'dinner', isClosed: boolean, reason?: string) => {
+    const updated = await bookingService.toggleShiftOverride(
+      selectedDate,
+      shift,
+      isClosed,
+      reason || 'Service closed by FOH Manager'
+    );
+    onSettingsUpdated(updated);
+  };
+
+  // Handle Submit Custom Blackout
+  const handleConfirmCustomBlackout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = await bookingService.toggleShiftOverride(
+      selectedDate,
+      blackoutShift,
+      true,
+      blackoutReason
+    );
+    onSettingsUpdated(updated);
+    setIsBlackoutModalOpen(false);
+  };
+
+  // Handle Re-opening a closed shift
+  const handleReopenShift = async (dateUK: string, shift: 'lunch' | 'dinner' | 'allDay') => {
+    const updated = await bookingService.toggleShiftOverride(dateUK, shift, false);
     onSettingsUpdated(updated);
   };
 
@@ -105,7 +216,7 @@ export function ServiceDashboard({
   // Handle Walk-In Submission
   const handleCreateWalkIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    await bookingService.createWalkIn(walkInCovers, walkInService, walkInTime, walkInNotes);
+    await bookingService.createWalkIn(walkInCovers, walkInService, walkInTime, walkInNotes, selectedDate);
     setIsWalkInOpen(false);
     setWalkInNotes('');
     onBookingsUpdated();
@@ -163,67 +274,328 @@ export function ServiceDashboard({
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6">
-      {/* Top Bar: Live Metrics & Kill Switch */}
-      <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl">
+      {/* 1. TOP BAR: Calendar Date Navigator & Master Controls */}
+      <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
+          {/* Active Date Title & Prev/Next Navigator */}
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-neutral-800 text-neutral-300 border border-white/10">
-                Front of House Live Operations
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800/50">
+                Front of House Service Console
               </span>
-              <span className="text-xs text-neutral-400">Date: {selectedDate}</span>
+              {isTodayUK(selectedDate) && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-neutral-950">
+                  TODAY
+                </span>
+              )}
             </div>
-            <h2 className="text-2xl font-black text-white tracking-tight mt-1">
-              Live Service Control & Kitchen Pacing
-            </h2>
+            <div className="flex items-center gap-3 mt-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedDate(addDaysUK(selectedDate, -1))}
+                className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg border border-white/10 transition cursor-pointer"
+                title="Previous Day"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                {formatDateToLongUK(selectedDate)}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(addDaysUK(selectedDate, 1))}
+                className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg border border-white/10 transition cursor-pointer"
+                title="Next Day"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Quick Actions & Master Kill Switch */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Walk-In Quick Add Button */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Toggle Month Calendar Button */}
+            <button
+              type="button"
+              onClick={() => setShowMonthGrid(!showMonthGrid)}
+              className={`min-h-[42px] px-3.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border cursor-pointer ${
+                showMonthGrid
+                  ? 'bg-emerald-500 text-neutral-950 border-emerald-400'
+                  : 'bg-neutral-800 text-neutral-200 border-white/10 hover:bg-neutral-750'
+              }`}
+            >
+              <CalendarDays className="w-4 h-4" />
+              <span>{showMonthGrid ? 'Hide Calendar' : 'Month Calendar'}</span>
+            </button>
+
+            {/* Fast Walk-In Button */}
             <button
               type="button"
               onClick={() => setIsWalkInOpen(true)}
-              className="min-h-[44px] px-4 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer"
+              className="min-h-[42px] px-3.5 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40"
             >
-              <Plus className="w-4 h-4" /> Fast Walk-In Add
+              <Plus className="w-4 h-4" /> Walk-In Add
             </button>
 
-            {/* Pacing Settings Config */}
+            {/* Shift Blackout Creator */}
             <button
               type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="min-h-[44px] px-3.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-semibold rounded-xl text-xs sm:text-sm border border-white/10 transition flex items-center gap-2 cursor-pointer"
-              title="Pacing & Capacity Settings"
+              onClick={() => setIsBlackoutModalOpen(true)}
+              className="min-h-[42px] px-3 bg-neutral-800 hover:bg-neutral-750 text-amber-300 font-semibold rounded-xl text-xs border border-amber-500/30 transition flex items-center gap-1.5 cursor-pointer"
+              title="Shut down a shift or day in the future"
             >
-              <Sliders className="w-4 h-4 text-neutral-400" /> Caps
+              <Ban className="w-4 h-4 text-amber-400" /> Shut Shift
             </button>
 
-            {/* Red / Green Master Kill Switch */}
+            {/* Future Blackouts List Trigger */}
+            {futureBlackouts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsFutureListOpen(true)}
+                className="min-h-[42px] px-3 bg-neutral-800 hover:bg-neutral-750 text-red-300 font-semibold rounded-xl text-xs border border-red-500/30 transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Layers className="w-4 h-4 text-red-400" /> {futureBlackouts.length} Closed
+              </button>
+            )}
+
+            {/* Master Kill Switch */}
             <button
               type="button"
               onClick={toggleMasterKillSwitch}
-              className={`min-h-[44px] px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 border cursor-pointer ${
+              className={`min-h-[42px] px-3.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border cursor-pointer ${
                 venueSettings.isOnlineBookingEnabled
                   ? 'bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900'
                   : 'bg-red-950 text-red-300 border-red-600 hover:bg-red-900 animate-pulse'
               }`}
             >
               <Power className="w-4 h-4" />
-              {venueSettings.isOnlineBookingEnabled ? 'Online Bookings: ACTIVE' : 'Online Bookings: PAUSED'}
+              {venueSettings.isOnlineBookingEnabled ? 'System: ACTIVE' : 'System: PAUSED'}
             </button>
           </div>
         </div>
 
-        {/* Live Metrics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mt-5">
+        {/* Quick Date Selectors Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <span className="text-xs text-neutral-400 font-semibold shrink-0 mr-1 flex items-center gap-1">
+            <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" /> Quick Jump:
+          </span>
+          {quickDatePills.map(({ label, date }) => {
+            const isSelected = selectedDate === date;
+            const dayCount = initialBookings.filter((b) => b.date === date && b.status !== 'cancelled').reduce((s, b) => s + b.covers, 0);
+            return (
+              <button
+                key={date}
+                type="button"
+                onClick={() => setSelectedDate(date)}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center gap-2 border cursor-pointer ${
+                  isSelected
+                    ? 'bg-emerald-500 text-neutral-950 border-emerald-400 font-bold shadow-md'
+                    : 'bg-neutral-950 text-neutral-300 border-white/10 hover:bg-neutral-800'
+                }`}
+              >
+                <span>{label}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
+                  isSelected ? 'bg-neutral-950 text-emerald-400 font-bold' : 'bg-neutral-800 text-neutral-400'
+                }`}>
+                  {dayCount} cov
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* EXPANDABLE MONTH CALENDAR GRID */}
+        {showMonthGrid && (
+          <div className="p-4 bg-neutral-950 rounded-2xl border border-white/15 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <CalendarDays className="w-4 h-4 text-emerald-400" /> Multi-Day Reservations & Capacity Calendar
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (calendarMonth === 0) {
+                      setCalendarMonth(11);
+                      setCalendarYear(calendarYear - 1);
+                    } else {
+                      setCalendarMonth(calendarMonth - 1);
+                    }
+                  }}
+                  className="p-1 text-neutral-400 hover:text-white rounded bg-neutral-900 border border-white/10"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-xs font-semibold text-neutral-200">
+                  {new Date(calendarYear, calendarMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (calendarMonth === 11) {
+                      setCalendarMonth(0);
+                      setCalendarYear(calendarYear + 1);
+                    } else {
+                      setCalendarMonth(calendarMonth + 1);
+                    }
+                  }}
+                  className="p-1 text-neutral-400 hover:text-white rounded bg-neutral-900 border border-white/10"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-neutral-500">
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+              <span>Sun</span>
+            </div>
+
+            {/* Days grid */}
+            <div className="grid grid-cols-7 gap-1.5">
+              {monthGridDays.map((d, index) => {
+                if (!d.isCurrentMonth) {
+                  return <div key={index} className="min-h-[54px] rounded-xl bg-neutral-900/20 border border-transparent" />;
+                }
+
+                const isSelected = selectedDate === d.dateUK;
+                const isToday = isTodayUK(d.dateUK);
+                const dayBookingsCount = initialBookings
+                  .filter((b) => b.date === d.dateUK && b.status !== 'cancelled')
+                  .reduce((sum, b) => sum + b.covers, 0);
+
+                const override = venueSettings.shiftOverrides?.[d.dateUK];
+                const hasClosure = override?.lunchClosed || override?.dinnerClosed || override?.allDayClosed;
+
+                return (
+                  <button
+                    key={d.dateUK}
+                    type="button"
+                    onClick={() => setSelectedDate(d.dateUK)}
+                    className={`min-h-[54px] p-1.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-md font-bold'
+                        : hasClosure
+                        ? 'bg-red-950/40 text-red-200 border-red-800/50 hover:bg-red-950/70'
+                        : isToday
+                        ? 'bg-neutral-800 text-white border-emerald-500/50'
+                        : 'bg-neutral-900 text-neutral-300 border-white/5 hover:bg-neutral-800 hover:border-white/15'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold">{d.dayNumber}</span>
+                      {hasClosure && (
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-neutral-950' : 'bg-red-500'}`} title="Shift closure on this day" />
+                      )}
+                    </div>
+                    <div className="text-[10px] truncate">
+                      {hasClosure ? (
+                        <span className={isSelected ? 'text-neutral-950 font-bold' : 'text-red-400'}>Closed</span>
+                      ) : dayBookingsCount > 0 ? (
+                        <span className={isSelected ? 'text-neutral-950' : 'text-emerald-400 font-semibold'}>
+                          {dayBookingsCount} cov
+                        </span>
+                      ) : (
+                        <span className="text-neutral-600">0 cov</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* SHIFT BLACKOUT / ONLINE BOOKING KILL SWITCHES FOR SELECTED DATE */}
+        <div className="p-4 bg-neutral-950 rounded-2xl border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-white/10 flex items-center justify-center text-amber-400 shrink-0">
+              <Ban className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Shift Online Status for {selectedDate}
+                </span>
+                {currentOverride?.reason && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-300 border border-red-800">
+                    Reason: {currentOverride.reason}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Instantly shut down or re-open online bookings for Lunch or Dinner on this date at will.
+              </p>
+            </div>
+          </div>
+
+          {/* Granular Shift Switches */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Lunch Switch */}
+            <div className="flex items-center gap-2 p-2 bg-neutral-900 rounded-xl border border-white/10">
+              <span className="text-xs font-bold text-amber-400">Lunch:</span>
+              <button
+                type="button"
+                onClick={() => handleToggleShiftClosure('lunch', !isLunchClosed)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                  isLunchClosed
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'bg-emerald-600 text-neutral-950'
+                }`}
+              >
+                {isLunchClosed ? (
+                  <>
+                    <Lock className="w-3 h-3" /> SHUT
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-3 h-3" /> OPEN
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Dinner Switch */}
+            <div className="flex items-center gap-2 p-2 bg-neutral-900 rounded-xl border border-white/10">
+              <span className="text-xs font-bold text-sky-400">Dinner:</span>
+              <button
+                type="button"
+                onClick={() => handleToggleShiftClosure('dinner', !isDinnerClosed)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                  isDinnerClosed
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'bg-emerald-600 text-neutral-950'
+                }`}
+              >
+                {isDinnerClosed ? (
+                  <>
+                    <Lock className="w-3 h-3" /> SHUT
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-3 h-3" /> OPEN
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Metrics Cards for Selected Date */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
           <div className="bg-neutral-950 p-4 rounded-xl border border-white/10">
             <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
-              <span>Total Booked Covers</span>
+              <span>Total Booked</span>
               <Users className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-black text-white">{metrics.totalBookedCovers}</div>
-            <div className="text-[11px] text-neutral-500 mt-1">Across all services today</div>
+            <div className="text-[11px] text-neutral-500 mt-1">Covers for {selectedDate}</div>
           </div>
 
           <div className="bg-neutral-950 p-4 rounded-xl border border-white/10">
@@ -232,7 +604,7 @@ export function ServiceDashboard({
               <UserCheck className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-black text-emerald-400">{metrics.seatedCovers}</div>
-            <div className="text-[11px] text-neutral-500 mt-1">Currently in the dining room</div>
+            <div className="text-[11px] text-neutral-500 mt-1">Currently in dining room</div>
           </div>
 
           <div className="bg-neutral-950 p-4 rounded-xl border border-white/10">
@@ -240,10 +612,15 @@ export function ServiceDashboard({
               <span>Remaining Lunch</span>
               <Flame className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-2xl font-black text-amber-400">
-              {metrics.remainingLunchCapacity} <span className="text-xs text-neutral-500 font-normal">/ {venueSettings.maxCoversPerShift.lunch} max</span>
+            <div className={`text-2xl font-black ${isLunchClosed ? 'text-red-400' : 'text-amber-400'}`}>
+              {isLunchClosed ? 'SHUT' : `${metrics.remainingLunchCapacity}`}
+              {!isLunchClosed && (
+                <span className="text-xs text-neutral-500 font-normal"> / {venueSettings.maxCoversPerShift.lunch} max</span>
+              )}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">12:00 - 15:00 Service</div>
+            <div className="text-[11px] text-neutral-500 mt-1">
+              {isLunchClosed ? 'Online booking closed' : '12:00 - 15:00 Service'}
+            </div>
           </div>
 
           <div className="bg-neutral-950 p-4 rounded-xl border border-white/10">
@@ -251,17 +628,21 @@ export function ServiceDashboard({
               <span>Remaining Dinner</span>
               <Flame className="w-4 h-4 text-sky-400" />
             </div>
-            <div className="text-2xl font-black text-sky-400">
-              {metrics.remainingDinnerCapacity} <span className="text-xs text-neutral-500 font-normal">/ {venueSettings.maxCoversPerShift.dinner} max</span>
+            <div className={`text-2xl font-black ${isDinnerClosed ? 'text-red-400' : 'text-sky-400'}`}>
+              {isDinnerClosed ? 'SHUT' : `${metrics.remainingDinnerCapacity}`}
+              {!isDinnerClosed && (
+                <span className="text-xs text-neutral-500 font-normal"> / {venueSettings.maxCoversPerShift.dinner} max</span>
+              )}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">17:30 - 22:00 Service</div>
+            <div className="text-[11px] text-neutral-500 mt-1">
+              {isDinnerClosed ? 'Online booking closed' : '17:30 - 22:00 Service'}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Filter & Search Bar */}
       <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3.5">
-        {/* Search */}
         <div className="w-full md:w-72 relative">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-3.5" />
           <input
@@ -269,18 +650,17 @@ export function ServiceDashboard({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search guest, ID, phone..."
-            className="w-full min-h-[42px] pl-10 pr-4 bg-neutral-950 border border-white/15 rounded-xl text-xs sm:text-sm text-white placeholder-neutral-500 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+            className="w-full min-h-[42px] pl-10 pr-4 bg-neutral-950 border border-white/15 rounded-xl text-xs sm:text-sm text-white placeholder-neutral-500 focus:border-emerald-400"
           />
         </div>
 
-        {/* Status Filters */}
         <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
           {(['all', 'confirmed', 'seated', 'pending', 'cancelled', 'no-show'] as const).map((st) => (
             <button
               key={st}
               type="button"
               onClick={() => setStatusFilter(st)}
-              className={`min-h-[38px] px-3 py-1 text-xs font-semibold rounded-lg capitalize border transition ${
+              className={`min-h-[38px] px-3 py-1 text-xs font-semibold rounded-lg capitalize border transition cursor-pointer ${
                 statusFilter === st
                   ? 'bg-neutral-100 text-neutral-950 border-white font-bold'
                   : 'bg-neutral-800 text-neutral-300 border-white/10 hover:bg-neutral-750'
@@ -292,23 +672,23 @@ export function ServiceDashboard({
         </div>
       </div>
 
-      {/* Timeline Sheet / Live Bookings Register */}
+      {/* TIMELINE SHEET / RESERVATIONS REGISTER FOR ACTIVE DATE */}
       <div className="bg-neutral-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
         <div className="p-4 sm:p-5 bg-neutral-950 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-emerald-400" />
             <h3 className="font-bold text-white text-sm sm:text-base">
-              Today&apos;s Chronological Timeline & Reservations ({filteredBookings.length})
+              Reservations for {selectedDate} ({filteredBookings.length})
             </h3>
           </div>
-          <span className="text-xs text-neutral-400">Pacing: Max {venueSettings.maxCoversPer15Mins} covers/15min</span>
+          <span className="text-xs text-neutral-400">Pacing: Max {venueSettings.maxCoversPer15Mins} covers/15m</span>
         </div>
 
         {filteredBookings.length === 0 ? (
           <div className="p-12 text-center text-neutral-400">
             <AlertTriangle className="w-8 h-8 mx-auto text-neutral-600 mb-2" />
-            <p className="text-sm font-semibold text-neutral-300">No reservations matching filter</p>
-            <p className="text-xs text-neutral-500 mt-1">Try switching status filters or clear search</p>
+            <p className="text-sm font-semibold text-neutral-300">No reservations found for {selectedDate}</p>
+            <p className="text-xs text-neutral-500 mt-1">Use the Walk-In button above to seat guests on the fly or pick another date.</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
@@ -336,7 +716,7 @@ export function ServiceDashboard({
 
                     {/* Contact & Special Requests Tags */}
                     <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-neutral-300">
-                      <a href={`tel:${b.customer.phone}`} className="hover:text-emerald-400 flex items-center gap-1">
+                      <a href={`tel:${b.customer.phone}`} className="hover:text-emerald-400 flex items-center gap-1 font-mono">
                         <Phone className="w-3 h-3 text-neutral-400" /> {b.customer.phone}
                       </a>
 
@@ -361,7 +741,7 @@ export function ServiceDashboard({
                   </div>
                 </div>
 
-                {/* Touch Actions (One-tap state transitions) */}
+                {/* Touch Actions */}
                 <div className="flex flex-wrap items-center gap-1.5 self-end lg:self-center">
                   {b.status !== 'seated' && (
                     <button
@@ -389,7 +769,6 @@ export function ServiceDashboard({
                       type="button"
                       onClick={() => handleStatusChange(b.id, 'no-show')}
                       className="min-h-[38px] px-2.5 bg-neutral-800 hover:bg-purple-950 text-purple-300 font-semibold rounded-lg text-xs border border-white/10 transition flex items-center gap-1 cursor-pointer"
-                      title="Mark as No-Show"
                     >
                       <UserX className="w-3.5 h-3.5" /> No-Show
                     </button>
@@ -400,7 +779,6 @@ export function ServiceDashboard({
                       type="button"
                       onClick={() => handleStatusChange(b.id, 'cancelled')}
                       className="min-h-[38px] px-2.5 bg-neutral-800 hover:bg-red-950 text-red-400 font-semibold rounded-lg text-xs border border-white/10 transition flex items-center gap-1 cursor-pointer"
-                      title="Cancel Booking"
                     >
                       <X className="w-3.5 h-3.5" /> Cancel
                     </button>
@@ -412,26 +790,152 @@ export function ServiceDashboard({
         )}
       </div>
 
-      {/* WALK-IN QUICK ADD MODAL (Fast 3-tap modal) */}
+      {/* SHUT SHIFT / CUSTOM BLACKOUT MODAL */}
+      {isBlackoutModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-white/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Shut Down Service for {selectedDate}</h3>
+                <p className="text-xs text-neutral-400">Block online bookings for this date/shift</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBlackoutModalOpen(false)}
+                className="p-1 text-neutral-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmCustomBlackout} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                  Select Service to Shut Down
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'lunch', label: 'Lunch Only' },
+                    { id: 'dinner', label: 'Dinner Only' },
+                    { id: 'allDay', label: 'All Day' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setBlackoutShift(opt.id as any)}
+                      className={`min-h-[44px] rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        blackoutShift === opt.id
+                          ? 'bg-amber-500 text-neutral-950 border-amber-400 font-black'
+                          : 'bg-neutral-950 text-neutral-300 border-white/10 hover:bg-neutral-800'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                  Reason (Displayed to Guests & Staff)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={blackoutReason}
+                  onChange={(e) => setBlackoutReason(e.target.value)}
+                  placeholder="e.g. Private Wedding, Deep Cleaning..."
+                  className="w-full min-h-[44px] px-3.5 bg-neutral-950 border border-white/15 rounded-xl text-sm text-white focus:border-amber-400"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-950/40 rounded-xl border border-amber-500/30 text-xs text-amber-200 space-y-1">
+                <p className="font-semibold text-amber-100 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" /> Instant Guest Widget Throttling
+                </p>
+                <p>New reservations for this shift on {selectedDate} will be instantly blocked on the guest widget with your specified reason.</p>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full min-h-[48px] bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm transition cursor-pointer shadow-lg shadow-red-950/50"
+              >
+                Confirm Shift Shutdown
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* FUTURE BLACKOUTS MANAGER DRAWER */}
+      {isFutureListOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-white/15 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Scheduled Future Shift Closures</h3>
+                <p className="text-xs text-neutral-400">All dates with closed shifts</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFutureListOpen(false)}
+                className="p-1 text-neutral-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {futureBlackouts.length === 0 ? (
+                <p className="text-xs text-neutral-400 text-center py-6">No future closures currently active.</p>
+              ) : (
+                futureBlackouts.map((bo) => (
+                  <div key={bo.date} className="p-4 bg-neutral-950 rounded-xl border border-white/10 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">{bo.date}</span>
+                        <span className="text-xs text-neutral-400">({formatDateToDayName(bo.date)})</span>
+                      </div>
+                      <p className="text-xs text-red-400 mt-0.5">
+                        {bo.allDayClosed ? 'All Day Closed' : bo.lunchClosed && bo.dinnerClosed ? 'Lunch & Dinner Closed' : bo.lunchClosed ? 'Lunch Closed' : 'Dinner Closed'}
+                        {bo.reason ? ` • ${bo.reason}` : ''}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleReopenShift(bo.date, 'allDay')}
+                      className="px-3 py-1.5 bg-neutral-800 hover:bg-emerald-950 hover:text-emerald-300 text-neutral-200 text-xs font-bold rounded-lg border border-white/10 transition cursor-pointer"
+                    >
+                      Re-Open
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WALK-IN QUICK ADD MODAL */}
       {isWalkInOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-neutral-900 border border-white/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <h3 className="text-lg font-bold text-white">Fast Walk-In Quick Add</h3>
-                <p className="text-xs text-neutral-400">Instantly seat walk-in guests & count capacity</p>
+                <h3 className="text-lg font-bold text-white">Fast Walk-In for {selectedDate}</h3>
+                <p className="text-xs text-neutral-400">Instantly seat walk-in guests on active date</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsWalkInOpen(false)}
-                className="p-1 text-neutral-400 hover:text-white rounded-lg"
+                className="p-1 text-neutral-400 hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateWalkIn} className="space-y-4">
-              {/* Tap 1: Party Size */}
               <div>
                 <label className="block text-xs font-semibold text-neutral-300 mb-2">
                   Tap 1: Party Size (Covers)
@@ -442,7 +946,7 @@ export function ServiceDashboard({
                       key={c}
                       type="button"
                       onClick={() => setWalkInCovers(c)}
-                      className={`min-h-[44px] rounded-xl font-bold text-sm border transition ${
+                      className={`min-h-[44px] rounded-xl font-bold text-sm border transition cursor-pointer ${
                         walkInCovers === c
                           ? 'bg-emerald-500 text-neutral-950 border-emerald-400 font-black'
                           : 'bg-neutral-800 text-neutral-200 border-white/10'
@@ -454,7 +958,6 @@ export function ServiceDashboard({
                 </div>
               </div>
 
-              {/* Tap 2: Service & Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
@@ -483,7 +986,6 @@ export function ServiceDashboard({
                 </div>
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
                   Dietary / Table Notes (Optional)
@@ -497,89 +999,11 @@ export function ServiceDashboard({
                 />
               </div>
 
-              {/* Tap 3: Confirm & Seat */}
               <button
                 type="submit"
                 className="w-full min-h-[50px] bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50"
               >
                 <UserCheck className="w-4 h-4" /> Tap 3: Confirm & Seat Walk-In ({walkInCovers} covers)
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CAPACITY & KITCHEN PACING SETTINGS MODAL */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-white/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-white">Kitchen Pacing & Shift Limits</h3>
-                <p className="text-xs text-neutral-400">Configure online booking throttle thresholds</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(false)}
-                className="p-1 text-neutral-400 hover:text-white rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveSettings} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
-                  Kitchen Pacing Cap (Max covers / 15 mins)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="30"
-                  value={editedPaceCap}
-                  onChange={(e) => setEditedPaceCap(Number(e.target.value))}
-                  className="w-full min-h-[44px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-sm text-white"
-                />
-                <p className="text-[11px] text-neutral-400 mt-1">
-                  Prevents orders flooding the kitchen in any single 15-minute interval.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
-                    Max Lunch Shift Covers
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="300"
-                    value={editedLunchCap}
-                    onChange={(e) => setEditedLunchCap(Number(e.target.value))}
-                    className="w-full min-h-[44px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
-                    Max Dinner Shift Covers
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="300"
-                    value={editedDinnerCap}
-                    onChange={(e) => setEditedDinnerCap(Number(e.target.value))}
-                    className="w-full min-h-[44px] px-3 bg-neutral-950 border border-white/15 rounded-xl text-sm text-white"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full min-h-[48px] bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-sm transition cursor-pointer"
-              >
-                Save Pacing Settings
               </button>
             </form>
           </div>

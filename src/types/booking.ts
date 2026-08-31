@@ -73,6 +73,14 @@ export interface VenuePolicies {
   specialDietaryNotice?: string;
 }
 
+export interface ShiftOverride {
+  lunchClosed?: boolean;
+  dinnerClosed?: boolean;
+  allDayClosed?: boolean;
+  reason?: string;
+  updatedAt?: string;
+}
+
 export interface VenueSettings {
   venueId: string;
   venueName: string;
@@ -94,6 +102,9 @@ export interface VenueSettings {
   };
   schedule?: WeeklySchedule;
   policies?: VenuePolicies;
+  shiftOverrides?: {
+    [dateUK: string]: ShiftOverride; // Key: "DD/MM/YYYY"
+  };
 }
 
 export interface SlotAvailability {
@@ -113,4 +124,7 @@ export interface DayCapacitySummary {
   cancelledCovers: number;
   remainingLunchCapacity: number;
   remainingDinnerCapacity: number;
+  isLunchClosed?: boolean;
+  isDinnerClosed?: boolean;
+  closureReason?: string;
 }

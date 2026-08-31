@@ -11,7 +11,6 @@ export function getTodayUKFormatted(): string {
 }
 
 export function parseUKDate(dateStr: string): Date {
-  // expects DD/MM/YYYY
   const parts = dateStr.split('/');
   if (parts.length !== 3) return new Date();
   const day = parseInt(parts[0], 10);
@@ -27,12 +26,37 @@ export function formatUKDate(date: Date): string {
   return `${day}/${month}/${year}`;
 }
 
+export function addDaysUK(dateStr: string, days: number): string {
+  const d = parseUKDate(dateStr);
+  d.setDate(d.getDate() + days);
+  return formatUKDate(d);
+}
+
 export function isPastUKDate(dateStr: string): boolean {
   const target = parseUKDate(dateStr);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
   return target.getTime() < today.getTime();
+}
+
+export function isTodayUK(dateStr: string): boolean {
+  return dateStr === getTodayUKFormatted();
+}
+
+export function formatDateToDayName(dateStr: string): string {
+  const date = parseUKDate(dateStr);
+  return date.toLocaleDateString('en-GB', { weekday: 'short' });
+}
+
+export function formatDateToLongUK(dateStr: string): string {
+  const date = parseUKDate(dateStr);
+  return date.toLocaleDateString('en-GB', { 
+    weekday: 'long', 
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
 }
 
 export function formatISOToUK(isoString: string): string {
@@ -50,7 +74,6 @@ export function formatISOToUK(isoString: string): string {
 export function validateUKPhone(phone: string): { isValid: boolean; formatted: string; error?: string } {
   const cleaned = phone.replace(/[\s\-()]/g, '');
   
-  // UK Mobile regex (+447 or 07 followed by 9 digits) or Landline (+441, +442, +443, 01, 02, 03)
   const ukMobileRegex = /^(?:(?:\+44|0044)7\d{9}|07\d{9})$/;
   const ukLandlineRegex = /^(?:(?:\+44|0044)[12389]\d{8,9}|0[12389]\d{8,9})$/;
 
@@ -59,7 +82,6 @@ export function validateUKPhone(phone: string): { isValid: boolean; formatted: s
   }
 
   if (ukMobileRegex.test(cleaned) || ukLandlineRegex.test(cleaned)) {
-    // Normalise to UK international or standard format
     let normalized = cleaned;
     if (normalized.startsWith('0044')) {
       normalized = '+44' + normalized.slice(4);
