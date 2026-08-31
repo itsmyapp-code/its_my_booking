@@ -135,6 +135,7 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
       name: `New Seating Area ${seatingAreas.length + 1}`,
       description: 'Customer dining section',
       isDogFriendly: false,
+      isHighchairAllowed: true,
       isOnlineBookingEnabled: true,
       tables: [
         { id: `tbl_${Date.now()}_1`, tableNumber: 'Table 1', maxCovers: 4, isActive: true },
@@ -858,7 +859,7 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
                         />
                       </div>
 
-                      {/* Area Rules: Dog-Friendly & Online Booking */}
+                      {/* Area Rules: Dog-Friendly, Highchairs & Online Booking */}
                       <div className="flex flex-wrap items-center gap-4 pt-1">
                         <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
                           <input
@@ -870,6 +871,23 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
                           <span className="flex items-center gap-1">
                             <Dog className="w-3.5 h-3.5 text-amber-400" /> Dog-Friendly Area
                           </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={area.isHighchairAllowed !== false}
+                            onChange={(e) => handleUpdateArea(area.id, 'isHighchairAllowed', e.target.checked)}
+                            className="w-4 h-4 accent-sky-500 rounded border-neutral-700 bg-neutral-900"
+                          />
+                          <span className="flex items-center gap-1">
+                            <Baby className="w-3.5 h-3.5 text-sky-400" /> Allow Highchairs
+                          </span>
+                          {area.isHighchairAllowed === false && (
+                            <span className="text-[10px] text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-800">
+                              No Highchairs
+                            </span>
+                          )}
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">

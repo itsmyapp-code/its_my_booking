@@ -1464,16 +1464,20 @@ export function ServiceDashboard({
                       className="w-full min-h-[40px] pl-9 pr-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
                     >
                       <option value="Unassigned Table">Unassigned Table (Assign upon arrival)</option>
-                      {(venueSettings.seatingAreas || []).map((area) => (
-                        <optgroup key={area.id} label={`${area.name} (${area.isDogFriendly ? '🐕 Dog Friendly' : 'No Dogs'})`}>
-                          <option value={area.name}>{area.name} (Any Table)</option>
-                          {area.tables.filter((t) => t.isActive).map((t) => (
-                            <option key={t.id} value={`${area.name} - ${t.tableNumber}`}>
-                              {area.name} • {t.tableNumber} (Max {t.maxCovers} covers)
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
+                      {(venueSettings.seatingAreas || []).map((area) => {
+                        const dogLabel = area.isDogFriendly ? '🐕 Dogs OK' : 'No Dogs';
+                        const babyLabel = area.isHighchairAllowed !== false ? '👶 Highchairs OK' : '🚫 No Highchairs';
+                        return (
+                          <optgroup key={area.id} label={`${area.name} (${dogLabel} • ${babyLabel})`}>
+                            <option value={area.name}>{area.name} (Any Table)</option>
+                            {area.tables.filter((t) => t.isActive).map((t) => (
+                              <option key={t.id} value={`${area.name} - ${t.tableNumber}`}>
+                                {area.name} • {t.tableNumber} (Max {t.maxCovers} covers)
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>

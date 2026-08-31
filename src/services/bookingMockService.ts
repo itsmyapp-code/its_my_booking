@@ -56,6 +56,7 @@ export const DEFAULT_SEATING_AREAS = [
     name: 'Main Dining Room',
     description: 'Central restaurant dining room with tablecloths and view of the open pass.',
     isDogFriendly: false,
+    isHighchairAllowed: true,
     isOnlineBookingEnabled: true,
     tables: [
       { id: 'tbl_1', tableNumber: 'Table 1', maxCovers: 2, isActive: true },
@@ -71,6 +72,7 @@ export const DEFAULT_SEATING_AREAS = [
     name: 'Snug & Fireplace Lounge',
     description: 'Cosy wood-panelled booths beside the historic log fireplace.',
     isDogFriendly: true,
+    isHighchairAllowed: true,
     isOnlineBookingEnabled: true,
     tables: [
       { id: 'tbl_snug_1', tableNumber: 'Booth 1', maxCovers: 4, isActive: true },
@@ -83,6 +85,7 @@ export const DEFAULT_SEATING_AREAS = [
     name: 'Bar Area (High Tops)',
     description: 'Informal bar tables near the ale pumps for drinks and casual dining.',
     isDogFriendly: true,
+    isHighchairAllowed: false, // High stools - no highchairs
     isOnlineBookingEnabled: false, // Walk-in only
     tables: [
       { id: 'tbl_bar_1', tableNumber: 'Bar Table 1', maxCovers: 2, isActive: true },
@@ -96,6 +99,7 @@ export const DEFAULT_SEATING_AREAS = [
     name: 'Garden & Riverside Terrace',
     description: 'Outdoor heated parasol tables with garden views.',
     isDogFriendly: true,
+    isHighchairAllowed: true,
     isOnlineBookingEnabled: true,
     tables: [
       { id: 'tbl_terrace_1', tableNumber: 'Terrace 1', maxCovers: 4, isActive: true },
@@ -109,6 +113,7 @@ export const DEFAULT_SEATING_AREAS = [
     name: 'Private Dining Room',
     description: 'Exclusive private suite for private parties and corporate banquets.',
     isDogFriendly: false,
+    isHighchairAllowed: true,
     isOnlineBookingEnabled: false, // Phone only
     tables: [
       { id: 'tbl_pdr_1', tableNumber: 'Private Dining Table', maxCovers: 14, isActive: true }

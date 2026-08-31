@@ -94,6 +94,7 @@ export interface SeatingArea {
   name: string;
   description?: string;
   isDogFriendly: boolean;
+  isHighchairAllowed: boolean;
   isOnlineBookingEnabled: boolean;
   tables: TableConfig[];
 }
