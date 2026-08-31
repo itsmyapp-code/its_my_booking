@@ -50,6 +50,72 @@ export const DEFAULT_WEEKLY_SCHEDULE: WeeklySchedule = {
   }
 };
 
+export const DEFAULT_SEATING_AREAS = [
+  {
+    id: 'area_main_dining',
+    name: 'Main Dining Room',
+    description: 'Central restaurant dining room with tablecloths and view of the open pass.',
+    isDogFriendly: false,
+    isOnlineBookingEnabled: true,
+    tables: [
+      { id: 'tbl_1', tableNumber: 'Table 1', maxCovers: 2, isActive: true },
+      { id: 'tbl_2', tableNumber: 'Table 2', maxCovers: 2, isActive: true },
+      { id: 'tbl_3', tableNumber: 'Table 3', maxCovers: 4, isActive: true },
+      { id: 'tbl_4', tableNumber: 'Table 4', maxCovers: 4, isActive: true },
+      { id: 'tbl_5', tableNumber: 'Table 5', maxCovers: 6, isActive: true },
+      { id: 'tbl_6', tableNumber: 'Table 6', maxCovers: 6, isActive: true }
+    ]
+  },
+  {
+    id: 'area_snug_fireplace',
+    name: 'Snug & Fireplace Lounge',
+    description: 'Cosy wood-panelled booths beside the historic log fireplace.',
+    isDogFriendly: true,
+    isOnlineBookingEnabled: true,
+    tables: [
+      { id: 'tbl_snug_1', tableNumber: 'Booth 1', maxCovers: 4, isActive: true },
+      { id: 'tbl_snug_2', tableNumber: 'Booth 2', maxCovers: 4, isActive: true },
+      { id: 'tbl_snug_3', tableNumber: 'Booth 3', maxCovers: 6, isActive: true }
+    ]
+  },
+  {
+    id: 'area_bar_area',
+    name: 'Bar Area (High Tops)',
+    description: 'Informal bar tables near the ale pumps for drinks and casual dining.',
+    isDogFriendly: true,
+    isOnlineBookingEnabled: false, // Walk-in only
+    tables: [
+      { id: 'tbl_bar_1', tableNumber: 'Bar Table 1', maxCovers: 2, isActive: true },
+      { id: 'tbl_bar_2', tableNumber: 'Bar Table 2', maxCovers: 2, isActive: true },
+      { id: 'tbl_bar_3', tableNumber: 'Bar Table 3', maxCovers: 4, isActive: true },
+      { id: 'tbl_bar_4', tableNumber: 'Bar Table 4', maxCovers: 4, isActive: true }
+    ]
+  },
+  {
+    id: 'area_terrace_garden',
+    name: 'Garden & Riverside Terrace',
+    description: 'Outdoor heated parasol tables with garden views.',
+    isDogFriendly: true,
+    isOnlineBookingEnabled: true,
+    tables: [
+      { id: 'tbl_terrace_1', tableNumber: 'Terrace 1', maxCovers: 4, isActive: true },
+      { id: 'tbl_terrace_2', tableNumber: 'Terrace 2', maxCovers: 4, isActive: true },
+      { id: 'tbl_terrace_3', tableNumber: 'Terrace 3', maxCovers: 6, isActive: true },
+      { id: 'tbl_terrace_4', tableNumber: 'Terrace 4', maxCovers: 6, isActive: true }
+    ]
+  },
+  {
+    id: 'area_private_dining',
+    name: 'Private Dining Room',
+    description: 'Exclusive private suite for private parties and corporate banquets.',
+    isDogFriendly: false,
+    isOnlineBookingEnabled: false, // Phone only
+    tables: [
+      { id: 'tbl_pdr_1', tableNumber: 'Private Dining Table', maxCovers: 14, isActive: true }
+    ]
+  }
+];
+
 export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
   venueId: 'venue_uk_01',
   venueName: 'The Royal Oak Gastropub & Kitchen',
@@ -77,6 +143,7 @@ export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
     dinner: { start: '17:30', end: '22:00' }
   },
   schedule: DEFAULT_WEEKLY_SCHEDULE,
+  seatingAreas: DEFAULT_SEATING_AREAS,
   policies: {
     dogFriendlyNotice: 'Well-behaved dogs on leads are welcome in our bar and garden terrace areas.',
     highchairNotice: 'Highchairs and booster seats are available on request during table booking.',
@@ -458,6 +525,7 @@ class BookingMockService {
         address: { ...DEFAULT_VENUE_SETTINGS.address, ...(parsed.address || {}) },
         schedule: { ...DEFAULT_WEEKLY_SCHEDULE, ...(parsed.schedule || {}) },
         policies: { ...DEFAULT_VENUE_SETTINGS.policies, ...(parsed.policies || {}) },
+        seatingAreas: parsed.seatingAreas || DEFAULT_SEATING_AREAS,
         shiftOverrides: parsed.shiftOverrides || {}
       };
     } catch {
@@ -482,6 +550,7 @@ class BookingMockService {
         ...(current.policies || DEFAULT_VENUE_SETTINGS.policies),
         ...(settings.policies || {})
       },
+      seatingAreas: settings.seatingAreas !== undefined ? settings.seatingAreas : (current.seatingAreas || DEFAULT_SEATING_AREAS),
       shiftOverrides: {
         ...(current.shiftOverrides || {}),
         ...(settings.shiftOverrides || {})

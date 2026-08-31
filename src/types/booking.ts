@@ -81,6 +81,23 @@ export interface ShiftOverride {
   updatedAt?: string;
 }
 
+export interface TableConfig {
+  id: string;
+  tableNumber: string;
+  maxCovers: number;
+  minCovers?: number;
+  isActive: boolean;
+}
+
+export interface SeatingArea {
+  id: string;
+  name: string;
+  description?: string;
+  isDogFriendly: boolean;
+  isOnlineBookingEnabled: boolean;
+  tables: TableConfig[];
+}
+
 export interface VenueSettings {
   venueId: string;
   venueName: string;
@@ -102,6 +119,7 @@ export interface VenueSettings {
   };
   schedule?: WeeklySchedule;
   policies?: VenuePolicies;
+  seatingAreas?: SeatingArea[];
   shiftOverrides?: {
     [dateUK: string]: ShiftOverride; // Key: "DD/MM/YYYY"
   };

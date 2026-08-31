@@ -1463,17 +1463,17 @@ export function ServiceDashboard({
                       onChange={(e) => setStaffTableArea(e.target.value)}
                       className="w-full min-h-[40px] pl-9 pr-3 bg-neutral-950 border border-white/15 rounded-xl text-xs text-white focus:border-emerald-400"
                     >
-                      <option value="Main Dining Room">Main Dining Room</option>
-                      <option value="Snug / Fireplace Area">Snug / Fireplace Area</option>
-                      <option value="Bar Area">Bar Area (High Tops)</option>
-                      <option value="Garden & Terrace">Garden & Terrace</option>
-                      <option value="Window Table">Window Table</option>
-                      <option value="Private Dining">Private Dining Room</option>
-                      <option value="Table 1">Table 1 (2 Covers)</option>
-                      <option value="Table 2">Table 2 (4 Covers)</option>
-                      <option value="Table 3">Table 3 (4 Covers)</option>
-                      <option value="Table 4">Table 4 (6 Covers)</option>
-                      <option value="Table 12">Table 12 (Large Booth)</option>
+                      <option value="Unassigned Table">Unassigned Table (Assign upon arrival)</option>
+                      {(venueSettings.seatingAreas || []).map((area) => (
+                        <optgroup key={area.id} label={`${area.name} (${area.isDogFriendly ? '🐕 Dog Friendly' : 'No Dogs'})`}>
+                          <option value={area.name}>{area.name} (Any Table)</option>
+                          {area.tables.filter((t) => t.isActive).map((t) => (
+                            <option key={t.id} value={`${area.name} - ${t.tableNumber}`}>
+                              {area.name} • {t.tableNumber} (Max {t.maxCovers} covers)
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
                     </select>
                   </div>
                 </div>

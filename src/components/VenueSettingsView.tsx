@@ -24,10 +24,16 @@ import {
   Copy,
   Link,
   Code,
-  Check
+  Check,
+  LayoutGrid,
+  Plus,
+  Trash2,
+  Armchair,
+  Layers
 } from 'lucide-react';
-import { VenueSettings, DayOfWeek, WeeklySchedule } from '@/types/booking';
+import { VenueSettings, DayOfWeek, WeeklySchedule, SeatingArea, TableConfig } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
+import { DEFAULT_SEATING_AREAS } from '@/services/bookingMockService';
 import { validateUKPhone } from '@/lib/date-utils';
 
 interface VenueSettingsViewProps {
@@ -65,7 +71,7 @@ const DAYS: { key: DayOfWeek; label: string }[] = [
 ];
 
 export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSettingsViewProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'address' | 'hours' | 'pacing' | 'policies'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'address' | 'hours' | 'pacing' | 'tables' | 'policies'>('profile');
   
   // Settings Form State
   const [venueName, setVenueName] = useState(initialSettings.venueName || '');
@@ -105,6 +111,11 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
     }
   );
 
+  // Seating Areas & Tables
+  const [seatingAreas, setSeatingAreas] = useState<SeatingArea[]>(
+    initialSettings.seatingAreas || DEFAULT_SEATING_AREAS
+  );
+
   // Policies
   const [dogNotice, setDogNotice] = useState(initialSettings.policies?.dogFriendlyNotice || '');
   const [highchairNotice, setHighchairNotice] = useState(initialSettings.policies?.highchairNotice || '');
@@ -115,6 +126,70 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Seating Area Helpers
+  const handleAddArea = () => {
+    const newId = `area_${Date.now()}`;
+    const newArea: SeatingArea = {
+      id: newId,
+      name: `New Seating Area ${seatingAreas.length + 1}`,
+      description: 'Customer dining section',
+      isDogFriendly: false,
+      isOnlineBookingEnabled: true,
+      tables: [
+        { id: `tbl_${Date.now()}_1`, tableNumber: 'Table 1', maxCovers: 4, isActive: true },
+        { id: `tbl_${Date.now()}_2`, tableNumber: 'Table 2', maxCovers: 4, isActive: true }
+      ]
+    };
+    setSeatingAreas([...seatingAreas, newArea]);
+  };
+
+  const handleDeleteArea = (areaId: string) => {
+    setSeatingAreas(seatingAreas.filter((a) => a.id !== areaId));
+  };
+
+  const handleUpdateArea = (areaId: string, field: keyof SeatingArea, val: any) => {
+    setSeatingAreas(
+      seatingAreas.map((a) => (a.id === areaId ? { ...a, [field]: val } : a))
+    );
+  };
+
+  const handleAddTable = (areaId: string) => {
+    setSeatingAreas(
+      seatingAreas.map((a) => {
+        if (a.id !== areaId) return a;
+        const nextNum = a.tables.length + 1;
+        const newTable: TableConfig = {
+          id: `tbl_${Date.now()}_${nextNum}`,
+          tableNumber: `Table ${nextNum}`,
+          maxCovers: 4,
+          isActive: true
+        };
+        return { ...a, tables: [...a.tables, newTable] };
+      })
+    );
+  };
+
+  const handleDeleteTable = (areaId: string, tableId: string) => {
+    setSeatingAreas(
+      seatingAreas.map((a) => {
+        if (a.id !== areaId) return a;
+        return { ...a, tables: a.tables.filter((t) => t.id !== tableId) };
+      })
+    );
+  };
+
+  const handleUpdateTable = (areaId: string, tableId: string, field: keyof TableConfig, val: any) => {
+    setSeatingAreas(
+      seatingAreas.map((a) => {
+        if (a.id !== areaId) return a;
+        return {
+          ...a,
+          tables: a.tables.map((t) => (t.id === tableId ? { ...t, [field]: val } : t))
+        };
+      })
+    );
+  };
 
   const handleToggleDayOpen = (day: DayOfWeek) => {
     setSchedule((prev) => ({
@@ -196,6 +271,7 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
           dinner: { start: dinnerStart, end: dinnerEnd }
         },
         schedule,
+        seatingAreas,
         policies: {
           dogFriendlyNotice: dogNotice.trim(),
           highchairNotice: highchairNotice.trim(),
@@ -310,6 +386,7 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
           { id: 'profile', label: 'Branding & Contact', icon: Building2 },
           { id: 'address', label: 'UK Address & Location', icon: MapPin },
           { id: 'hours', label: 'Opening Hours & Shifts', icon: Clock },
+          { id: 'tables', label: 'Seating Areas & Tables', icon: LayoutGrid },
           { id: 'pacing', label: 'Kitchen Pacing & Caps', icon: Flame },
           { id: 'policies', label: 'Guest Policies & Notice', icon: ShieldCheck }
         ].map((tab) => {
@@ -319,7 +396,7 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as 'profile' | 'address' | 'hours' | 'pacing' | 'policies')}
+              onClick={() => setActiveTab(tab.id as any)}
               className={`min-h-[44px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition flex items-center gap-2 border cursor-pointer ${
                 isActive
                   ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-md'
@@ -674,6 +751,203 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
                           Venue closed all day (no online reservations generated)
                         </div>
                       )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: Seating Areas & Tables Management */}
+          {activeTab === 'tables' && (
+            <div className="space-y-6">
+              <div className="border-b border-white/10 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <LayoutGrid className="w-4 h-4 text-emerald-400" /> Seating Areas & Table Management
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Define dining sections, table layouts, and area rules (dog-friendly, online bookable).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddArea}
+                  className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md self-start sm:self-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add New Area
+                </button>
+              </div>
+
+              {/* Total Summary Metrics Bar */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3.5 bg-neutral-950 rounded-xl border border-white/10 text-center">
+                  <span className="text-[11px] text-neutral-400 block font-semibold">Total Areas</span>
+                  <span className="text-xl font-black text-white">{seatingAreas.length}</span>
+                </div>
+                <div className="p-3.5 bg-neutral-950 rounded-xl border border-white/10 text-center">
+                  <span className="text-[11px] text-neutral-400 block font-semibold">Active Tables</span>
+                  <span className="text-xl font-black text-emerald-400">
+                    {seatingAreas.reduce((sum, a) => sum + a.tables.filter((t) => t.isActive).length, 0)}
+                  </span>
+                </div>
+                <div className="p-3.5 bg-neutral-950 rounded-xl border border-white/10 text-center">
+                  <span className="text-[11px] text-neutral-400 block font-semibold">Venue Seated Capacity</span>
+                  <span className="text-xl font-black text-sky-400">
+                    {seatingAreas.reduce(
+                      (sum, a) => sum + a.tables.filter((t) => t.isActive).reduce((s, t) => s + Number(t.maxCovers), 0),
+                      0
+                    )}{' '}
+                    <span className="text-xs text-neutral-500 font-normal">covers</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Seating Areas List */}
+              <div className="space-y-4">
+                {seatingAreas.map((area, index) => {
+                  const areaCapacity = area.tables.filter((t) => t.isActive).reduce((s, t) => s + Number(t.maxCovers), 0);
+
+                  return (
+                    <div
+                      key={area.id}
+                      className="p-4 sm:p-5 bg-neutral-950 rounded-2xl border border-white/10 space-y-4 transition"
+                    >
+                      {/* Area Header & Name Input */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                        <div className="flex-1 flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-white/10 flex items-center justify-center text-emerald-400 shrink-0 font-mono font-bold text-xs">
+                            {index + 1}
+                          </div>
+                          <input
+                            type="text"
+                            value={area.name}
+                            onChange={(e) => handleUpdateArea(area.id, 'name', e.target.value)}
+                            placeholder="e.g. Main Dining Room"
+                            className="w-full max-w-sm px-3 py-1.5 bg-neutral-900 border border-white/15 rounded-xl text-sm font-bold text-white focus:border-emerald-400"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <span className="text-xs font-mono font-bold text-emerald-400 px-2 py-1 bg-neutral-900 rounded-lg border border-white/10">
+                            {areaCapacity} covers ({area.tables.length} tables)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteArea(area.id)}
+                            className="p-1.5 bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-red-400 rounded-lg border border-white/10 transition cursor-pointer"
+                            title="Delete this seating area"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Area Description */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-neutral-400 mb-1">
+                          Section Description & Guest Notes
+                        </label>
+                        <input
+                          type="text"
+                          value={area.description || ''}
+                          onChange={(e) => handleUpdateArea(area.id, 'description', e.target.value)}
+                          placeholder="e.g. Central restaurant section with views of the pass."
+                          className="w-full px-3 py-1.5 bg-neutral-900 border border-white/15 rounded-xl text-xs text-neutral-200 focus:border-emerald-400"
+                        />
+                      </div>
+
+                      {/* Area Rules: Dog-Friendly & Online Booking */}
+                      <div className="flex flex-wrap items-center gap-4 pt-1">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={area.isDogFriendly}
+                            onChange={(e) => handleUpdateArea(area.id, 'isDogFriendly', e.target.checked)}
+                            className="w-4 h-4 accent-amber-500 rounded border-neutral-700 bg-neutral-900"
+                          />
+                          <span className="flex items-center gap-1">
+                            <Dog className="w-3.5 h-3.5 text-amber-400" /> Dog-Friendly Area
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={area.isOnlineBookingEnabled}
+                            onChange={(e) => handleUpdateArea(area.id, 'isOnlineBookingEnabled', e.target.checked)}
+                            className="w-4 h-4 accent-emerald-500 rounded border-neutral-700 bg-neutral-900"
+                          />
+                          <span>Allow Online Guest Bookings</span>
+                          {!area.isOnlineBookingEnabled && (
+                            <span className="text-[10px] text-amber-400 font-bold px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800">
+                              Phone / Walk-in Only
+                            </span>
+                          )}
+                        </label>
+                      </div>
+
+                      {/* Tables Sub-Section */}
+                      <div className="pt-2 border-t border-white/5 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                            Tables & Covers Configuration
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAddTable(area.id)}
+                            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Add Table
+                          </button>
+                        </div>
+
+                        {/* Tables Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {area.tables.map((table) => (
+                            <div
+                              key={table.id}
+                              className="p-2.5 bg-neutral-900 rounded-xl border border-white/10 flex items-center justify-between gap-2"
+                            >
+                              <div className="flex-1 flex items-center gap-1.5">
+                                <Armchair className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                <input
+                                  type="text"
+                                  value={table.tableNumber}
+                                  onChange={(e) => handleUpdateTable(area.id, table.id, 'tableNumber', e.target.value)}
+                                  placeholder="Table name"
+                                  className="w-full min-w-[70px] px-2 py-1 bg-neutral-950 border border-white/10 rounded text-xs font-bold text-white focus:border-emerald-400"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="30"
+                                  value={table.maxCovers}
+                                  onChange={(e) =>
+                                    handleUpdateTable(area.id, table.id, 'maxCovers', Math.max(1, Number(e.target.value)))
+                                  }
+                                  className="w-12 px-1.5 py-1 bg-neutral-950 border border-white/10 rounded text-xs font-bold text-emerald-400 text-center"
+                                  title="Max party covers for this table"
+                                />
+                                <span className="text-[10px] text-neutral-400">cov</span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTable(area.id, table.id)}
+                                  className="p-1 text-neutral-500 hover:text-red-400 rounded cursor-pointer transition"
+                                  title="Delete table"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
