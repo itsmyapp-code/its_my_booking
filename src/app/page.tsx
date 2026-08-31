@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/Header';
 import { GuestBookingWidget } from '@/components/GuestBookingWidget';
 import { ServiceDashboard } from '@/components/ServiceDashboard';
+import { VenueReportsView } from '@/components/VenueReportsView';
 import { VenueSettingsView } from '@/components/VenueSettingsView';
 import { VenueAuthModal } from '@/components/VenueAuthModal';
 import { Footer } from '@/components/Footer';
@@ -15,7 +16,7 @@ import { DEFAULT_VENUE_SETTINGS } from '@/services/bookingMockService';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<'guest' | 'dashboard' | 'settings'>('guest');
+  const [activeView, setActiveView] = useState<'guest' | 'dashboard' | 'reports' | 'settings'>('guest');
   const [venueSettings, setVenueSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [operatorUser, setOperatorUser] = useState<OperatorUser | null>(null);
@@ -74,8 +75,8 @@ export default function Home() {
     showToast('Reset to initial realistic UK seed bookings & settings');
   };
 
-  const handleViewChange = (view: 'guest' | 'dashboard' | 'settings') => {
-    if ((view === 'dashboard' || view === 'settings') && !operatorUser) {
+  const handleViewChange = (view: 'guest' | 'dashboard' | 'reports' | 'settings') => {
+    if ((view === 'dashboard' || view === 'reports' || view === 'settings') && !operatorUser) {
       setIsAuthOpen(true);
       return;
     }
@@ -117,7 +118,6 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-
         {/* View Switcher Container */}
         {activeView === 'guest' && (
           <div className="transition-all duration-200">
@@ -135,6 +135,15 @@ export default function Home() {
               venueSettings={venueSettings}
               onSettingsUpdated={handleSettingsUpdated}
               onBookingsUpdated={refreshData}
+            />
+          </div>
+        )}
+
+        {activeView === 'reports' && operatorUser && (
+          <div className="transition-all duration-200">
+            <VenueReportsView
+              bookings={bookings}
+              venueSettings={venueSettings}
             />
           </div>
         )}

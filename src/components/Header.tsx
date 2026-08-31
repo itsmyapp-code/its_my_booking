@@ -10,14 +10,15 @@ import {
   User,
   LogOut,
   Lock,
-  Sparkles
+  Sparkles,
+  BarChart3
 } from 'lucide-react';
 import { VenueSettings } from '@/types/booking';
 import { OperatorUser } from '@/lib/auth-service';
 
 interface HeaderProps {
-  activeView: 'guest' | 'dashboard' | 'settings';
-  onViewChange: (view: 'guest' | 'dashboard' | 'settings') => void;
+  activeView: 'guest' | 'dashboard' | 'reports' | 'settings';
+  onViewChange: (view: 'guest' | 'dashboard' | 'reports' | 'settings') => void;
   onResetDemo: () => void;
   onOpenCompliance: () => void;
   onOpenLogin: () => void;
@@ -95,6 +96,19 @@ export function Header({
               >
                 <LayoutDashboard className="w-3.5 h-3.5" />
                 <span>Operator</span> <span className="hidden md:inline">FOH</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onViewChange('reports')}
+                className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeView === 'reports'
+                    ? 'bg-emerald-500 text-neutral-950 shadow-md'
+                    : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Reports</span>
               </button>
 
               <button
