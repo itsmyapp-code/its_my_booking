@@ -22,12 +22,13 @@ import {
   ChevronRight, 
   CalendarDays, 
   Ban, 
-  Sparkles,
-  Phone,
-  Lock,
-  Unlock,
-  Layers,
-  AlertCircle
+  Sparkles, 
+  Phone, 
+  Lock, 
+  Unlock, 
+  Layers, 
+  AlertCircle,
+  ArrowRight
 } from 'lucide-react';
 import { Booking, BookingStatus, VenueSettings, DayCapacitySummary, ShiftOverride } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
@@ -55,6 +56,7 @@ export function ServiceDashboard({
   onBookingsUpdated
 }: ServiceDashboardProps) {
   const [selectedDate, setSelectedDate] = useState<string>(getTodayUKFormatted());
+  const [manualDateInput, setManualDateInput] = useState<string>(getTodayUKFormatted());
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [serviceFilter, setServiceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -71,8 +73,10 @@ export function ServiceDashboard({
   const [isFutureListOpen, setIsFutureListOpen] = useState<boolean>(false);
 
   // Blackout form state
-  const [blackoutShift, setBlackoutShift] = useState<'lunch' | 'dinner' | 'allDay'>('lunch');
-  const [blackoutReason, setBlackoutReason] = useState<string>('Private Event');
+  const [blackoutDate, setBlackoutDate] = useState<string>(selectedDate);
+  const [blackoutShift, setBlackoutShift] = useState<'lunch' | 'dinner' | 'allDay'>('allDay');
+  const [blackoutReason, setBlackoutReason] = useState<string>('Private Event / Maintenance');
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
 
   // Walk-in form state
   const [walkInCovers, setWalkInCovers] = useState<number>(2);
@@ -87,8 +91,9 @@ export function ServiceDashboard({
 
   // Active date override info
   const currentOverride: ShiftOverride | undefined = venueSettings.shiftOverrides?.[selectedDate];
-  const isLunchClosed = !!currentOverride?.lunchClosed || !!currentOverride?.allDayClosed;
-  const isDinnerClosed = !!currentOverride?.dinnerClosed || !!currentOverride?.allDayClosed;
+  const isAllDayClosed = !!currentOverride?.allDayClosed;
+  const isLunchClosed = isAllDayClosed || !!currentOverride?.lunchClosed;
+  const isDinnerClosed = isAllDayClosed || !!currentOverride?.dinnerClosed;
 
   // Filter bookings for selected date & criteria
   const dayBookings = useMemo(() => {
@@ -168,6 +173,26 @@ export function ServiceDashboard({
       .map(([date, ov]) => ({ date, ...ov }));
   }, [venueSettings.shiftOverrides]);
 
+  // Show notice banner
+  const triggerNotice = (msg: string) => {
+    setConfirmationNotice(msg);
+    setTimeout(() => {
+      setConfirmationNotice(null);
+    }, 5000);
+  };
+
+  const handleSelectDate = (date: string) => {
+    setSelectedDate(date);
+    setManualDateInput(date);
+  };
+
+  const handleManualDateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualDateInput.trim()) {
+      handleSelectDate(manualDateInput.trim());
+    }
+  };
+
   // Handle Master Kill Switch
   const toggleMasterKillSwitch = async () => {
     const nextState = !venueSettings.isOnlineBookingEnabled;
@@ -175,10 +200,11 @@ export function ServiceDashboard({
       isOnlineBookingEnabled: nextState
     });
     onSettingsUpdated(updated);
+    triggerNotice(nextState ? 'Master Switch: Online bookings enabled' : 'Master Switch: All online bookings paused');
   };
 
   // Handle Shift Blackout Toggle
-  const handleToggleShiftClosure = async (shift: 'lunch' | 'dinner', isClosed: boolean, reason?: string) => {
+  const handleToggleShiftClosure = async (shift: 'lunch' | 'dinner' | 'allDay', isClosed: boolean, reason?: string) => {
     const updated = await bookingService.toggleShiftOverride(
       selectedDate,
       shift,
@@ -186,25 +212,39 @@ export function ServiceDashboard({
       reason || 'Service closed by FOH Manager'
     );
     onSettingsUpdated(updated);
+    triggerNotice(
+      isClosed 
+        ? `⛔ ${shift.toUpperCase()} closed for ${selectedDate} (Online bookings blocked)` 
+        : `✅ ${shift.toUpperCase()} re-opened for ${selectedDate}`
+    );
   };
 
-  // Handle Submit Custom Blackout
+  // Handle Submit Custom Blackout Modal
   const handleConfirmCustomBlackout = async (e: React.FormEvent) => {
     e.preventDefault();
+    const targetDate = blackoutDate.trim() || selectedDate;
+    
     const updated = await bookingService.toggleShiftOverride(
-      selectedDate,
+      targetDate,
       blackoutShift,
       true,
-      blackoutReason
+      blackoutReason.trim() || 'Service closed by FOH Manager'
     );
+    
     onSettingsUpdated(updated);
+    handleSelectDate(targetDate);
     setIsBlackoutModalOpen(false);
+    
+    triggerNotice(
+      `⛔ Confirmed: ${blackoutShift === 'allDay' ? 'All Day' : blackoutShift.toUpperCase()} closed on ${targetDate}. Reason: "${blackoutReason}"`
+    );
   };
 
   // Handle Re-opening a closed shift
   const handleReopenShift = async (dateUK: string, shift: 'lunch' | 'dinner' | 'allDay') => {
     const updated = await bookingService.toggleShiftOverride(dateUK, shift, false);
     onSettingsUpdated(updated);
+    triggerNotice(`✅ Restored online bookings for ${dateUK}`);
   };
 
   // Handle Status Update
@@ -220,6 +260,7 @@ export function ServiceDashboard({
     setIsWalkInOpen(false);
     setWalkInNotes('');
     onBookingsUpdated();
+    triggerNotice(`Walk-in guest (${walkInCovers} covers) seated for ${selectedDate}`);
   };
 
   // Handle Save Settings
@@ -234,6 +275,7 @@ export function ServiceDashboard({
     });
     onSettingsUpdated(updated);
     setIsSettingsOpen(false);
+    triggerNotice('Updated kitchen pacing and shift caps');
   };
 
   // Helper for Status Badge
@@ -274,6 +316,23 @@ export function ServiceDashboard({
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6">
+      {/* Visual Confirmation Toast Banner */}
+      {confirmationNotice && (
+        <div className="p-4 bg-neutral-900 border-2 border-emerald-500 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-sm text-white animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="font-bold">{confirmationNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setConfirmationNotice(null)}
+            className="p-1 text-neutral-400 hover:text-white rounded"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* 1. TOP BAR: Calendar Date Navigator & Master Controls */}
       <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
@@ -288,31 +347,56 @@ export function ServiceDashboard({
                   TODAY
                 </span>
               )}
+              {isAllDayClosed && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white animate-pulse">
+                  ALL DAY SHUT
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-3 mt-1.5">
+
+            <div className="flex flex-wrap items-center gap-3 mt-1.5">
               <button
                 type="button"
-                onClick={() => setSelectedDate(addDaysUK(selectedDate, -1))}
+                onClick={() => handleSelectDate(addDaysUK(selectedDate, -1))}
                 className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg border border-white/10 transition cursor-pointer"
                 title="Previous Day"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
+
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 {formatDateToLongUK(selectedDate)}
               </h2>
+
               <button
                 type="button"
-                onClick={() => setSelectedDate(addDaysUK(selectedDate, 1))}
+                onClick={() => handleSelectDate(addDaysUK(selectedDate, 1))}
                 className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg border border-white/10 transition cursor-pointer"
                 title="Next Day"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
+
+              {/* Direct Date Input */}
+              <form onSubmit={handleManualDateSubmit} className="flex items-center gap-1.5 ml-2">
+                <input
+                  type="text"
+                  value={manualDateInput}
+                  onChange={(e) => setManualDateInput(e.target.value)}
+                  placeholder="DD/MM/YYYY"
+                  className="w-28 min-h-[36px] px-2.5 py-1 bg-neutral-950 border border-white/20 rounded-lg text-xs font-mono text-white text-center focus:border-emerald-400"
+                />
+                <button
+                  type="submit"
+                  className="min-h-[36px] px-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold rounded-lg border border-white/10 transition cursor-pointer"
+                >
+                  Go
+                </button>
+              </form>
             </div>
           </div>
 
-          {/* Quick Actions & Master Kill Switch */}
+          {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Toggle Month Calendar Button */}
             <button
@@ -320,7 +404,7 @@ export function ServiceDashboard({
               onClick={() => setShowMonthGrid(!showMonthGrid)}
               className={`min-h-[42px] px-3.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border cursor-pointer ${
                 showMonthGrid
-                  ? 'bg-emerald-500 text-neutral-950 border-emerald-400'
+                  ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-md'
                   : 'bg-neutral-800 text-neutral-200 border-white/10 hover:bg-neutral-750'
               }`}
             >
@@ -340,11 +424,14 @@ export function ServiceDashboard({
             {/* Shift Blackout Creator */}
             <button
               type="button"
-              onClick={() => setIsBlackoutModalOpen(true)}
-              className="min-h-[42px] px-3 bg-neutral-800 hover:bg-neutral-750 text-amber-300 font-semibold rounded-xl text-xs border border-amber-500/30 transition flex items-center gap-1.5 cursor-pointer"
-              title="Shut down a shift or day in the future"
+              onClick={() => {
+                setBlackoutDate(selectedDate);
+                setIsBlackoutModalOpen(true);
+              }}
+              className="min-h-[42px] px-3.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              title="Shut down a shift or entire day in the future"
             >
-              <Ban className="w-4 h-4 text-amber-400" /> Shut Shift
+              <Ban className="w-4 h-4 text-neutral-950" /> Shut Down Service
             </button>
 
             {/* Future Blackouts List Trigger */}
@@ -382,23 +469,34 @@ export function ServiceDashboard({
           {quickDatePills.map(({ label, date }) => {
             const isSelected = selectedDate === date;
             const dayCount = initialBookings.filter((b) => b.date === date && b.status !== 'cancelled').reduce((s, b) => s + b.covers, 0);
+            const override = venueSettings.shiftOverrides?.[date];
+            const isShut = override?.allDayClosed || override?.lunchClosed || override?.dinnerClosed;
+
             return (
               <button
                 key={date}
                 type="button"
-                onClick={() => setSelectedDate(date)}
+                onClick={() => handleSelectDate(date)}
                 className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center gap-2 border cursor-pointer ${
                   isSelected
                     ? 'bg-emerald-500 text-neutral-950 border-emerald-400 font-bold shadow-md'
+                    : isShut
+                    ? 'bg-red-950/50 text-red-200 border-red-800/60 hover:bg-red-900'
                     : 'bg-neutral-950 text-neutral-300 border-white/10 hover:bg-neutral-800'
                 }`}
               >
                 <span>{label}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
-                  isSelected ? 'bg-neutral-950 text-emerald-400 font-bold' : 'bg-neutral-800 text-neutral-400'
-                }`}>
-                  {dayCount} cov
-                </span>
+                {isShut ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold">
+                    SHUT
+                  </span>
+                ) : (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
+                    isSelected ? 'bg-neutral-950 text-emerald-400 font-bold' : 'bg-neutral-800 text-neutral-400'
+                  }`}>
+                    {dayCount} cov
+                  </span>
+                )}
               </button>
             );
           })}
@@ -406,11 +504,17 @@ export function ServiceDashboard({
 
         {/* EXPANDABLE MONTH CALENDAR GRID */}
         {showMonthGrid && (
-          <div className="p-4 bg-neutral-950 rounded-2xl border border-white/15 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <CalendarDays className="w-4 h-4 text-emerald-400" /> Multi-Day Reservations & Capacity Calendar
-              </span>
+          <div className="p-5 bg-neutral-950 rounded-2xl border border-white/15 space-y-4 shadow-inner">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <CalendarDays className="w-4 h-4 text-emerald-400" /> Multi-Day Master Calendar
+                </span>
+                <p className="text-[11px] text-neutral-400 mt-0.5">
+                  Click any day to view covers, manage reservations, or shut down shifts.
+                </p>
+              </div>
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -422,11 +526,11 @@ export function ServiceDashboard({
                       setCalendarMonth(calendarMonth - 1);
                     }
                   }}
-                  className="p-1 text-neutral-400 hover:text-white rounded bg-neutral-900 border border-white/10"
+                  className="p-1.5 text-neutral-300 hover:text-white rounded-lg bg-neutral-900 border border-white/10 cursor-pointer"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs font-semibold text-neutral-200">
+                <span className="text-xs font-bold text-white px-2">
                   {new Date(calendarYear, calendarMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
                 </span>
                 <button
@@ -439,15 +543,15 @@ export function ServiceDashboard({
                       setCalendarMonth(calendarMonth + 1);
                     }
                   }}
-                  className="p-1 text-neutral-400 hover:text-white rounded bg-neutral-900 border border-white/10"
+                  className="p-1.5 text-neutral-300 hover:text-white rounded-lg bg-neutral-900 border border-white/10 cursor-pointer"
                 >
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-neutral-500">
+            <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold text-neutral-400">
               <span>Mon</span>
               <span>Tue</span>
               <span>Wed</span>
@@ -461,7 +565,7 @@ export function ServiceDashboard({
             <div className="grid grid-cols-7 gap-1.5">
               {monthGridDays.map((d, index) => {
                 if (!d.isCurrentMonth) {
-                  return <div key={index} className="min-h-[54px] rounded-xl bg-neutral-900/20 border border-transparent" />;
+                  return <div key={index} className="min-h-[58px] rounded-xl bg-neutral-900/10 border border-transparent" />;
                 }
 
                 const isSelected = selectedDate === d.dateUK;
@@ -471,38 +575,47 @@ export function ServiceDashboard({
                   .reduce((sum, b) => sum + b.covers, 0);
 
                 const override = venueSettings.shiftOverrides?.[d.dateUK];
-                const hasClosure = override?.lunchClosed || override?.dinnerClosed || override?.allDayClosed;
+                const isAllShut = !!override?.allDayClosed;
+                const isLunchShut = !isAllShut && !!override?.lunchClosed;
+                const isDinnerShut = !isAllShut && !!override?.dinnerClosed;
+                const hasClosure = isAllShut || isLunchShut || isDinnerShut;
 
                 return (
                   <button
                     key={d.dateUK}
                     type="button"
-                    onClick={() => setSelectedDate(d.dateUK)}
-                    className={`min-h-[54px] p-1.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    onClick={() => handleSelectDate(d.dateUK)}
+                    className={`min-h-[58px] p-2 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       isSelected
-                        ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-md font-bold'
+                        ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-lg font-bold scale-[1.02]'
+                        : isAllShut
+                        ? 'bg-red-950/80 text-red-100 border-red-600 hover:bg-red-900'
                         : hasClosure
-                        ? 'bg-red-950/40 text-red-200 border-red-800/50 hover:bg-red-950/70'
+                        ? 'bg-amber-950/60 text-amber-200 border-amber-600/70 hover:bg-amber-900'
                         : isToday
-                        ? 'bg-neutral-800 text-white border-emerald-500/50'
-                        : 'bg-neutral-900 text-neutral-300 border-white/5 hover:bg-neutral-800 hover:border-white/15'
+                        ? 'bg-neutral-800 text-white border-emerald-500/70'
+                        : 'bg-neutral-900 text-neutral-300 border-white/10 hover:bg-neutral-800 hover:border-white/20'
                     }`}
                   >
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold">{d.dayNumber}</span>
+                      <span className="font-black">{d.dayNumber}</span>
                       {hasClosure && (
-                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-neutral-950' : 'bg-red-500'}`} title="Shift closure on this day" />
+                        <span className={`px-1 rounded text-[9px] font-black ${isSelected ? 'bg-neutral-950 text-red-400' : 'bg-red-600 text-white'}`}>
+                          {isAllShut ? 'SHUT' : isLunchShut ? 'NO LUNCH' : 'NO DINNER'}
+                        </span>
                       )}
                     </div>
                     <div className="text-[10px] truncate">
-                      {hasClosure ? (
-                        <span className={isSelected ? 'text-neutral-950 font-bold' : 'text-red-400'}>Closed</span>
+                      {isAllShut ? (
+                        <span className={isSelected ? 'text-neutral-950 font-black' : 'text-red-300 font-bold'}>
+                          Closed ({override?.reason || 'Event'})
+                        </span>
                       ) : dayBookingsCount > 0 ? (
-                        <span className={isSelected ? 'text-neutral-950' : 'text-emerald-400 font-semibold'}>
-                          {dayBookingsCount} cov
+                        <span className={isSelected ? 'text-neutral-950 font-black' : 'text-emerald-400 font-bold'}>
+                          {dayBookingsCount} covers
                         </span>
                       ) : (
-                        <span className="text-neutral-600">0 cov</span>
+                        <span className="text-neutral-500">0 covers</span>
                       )}
                     </div>
                   </button>
@@ -512,38 +625,52 @@ export function ServiceDashboard({
           </div>
         )}
 
-        {/* SHIFT BLACKOUT / ONLINE BOOKING KILL SWITCHES FOR SELECTED DATE */}
-        <div className="p-4 bg-neutral-950 rounded-2xl border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-white/10 flex items-center justify-center text-amber-400 shrink-0">
-              <Ban className="w-5 h-5" />
+        {/* SHIFT STATUS & ONLINE BOOKING KILL SWITCHES FOR SELECTED DATE */}
+        <div className={`p-4 sm:p-5 rounded-2xl border transition flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+          isAllDayClosed 
+            ? 'bg-red-950/70 border-red-600' 
+            : 'bg-neutral-950 border-white/10'
+        }`}>
+          <div className="flex items-center gap-3.5">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isAllDayClosed ? 'bg-red-900 border-red-500 text-white' : 'bg-neutral-900 border-white/10 text-amber-400'
+            }`}>
+              <Ban className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">
-                  Shift Online Status for {selectedDate}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-black text-white uppercase tracking-wider">
+                  Service Online Controls for {selectedDate}
                 </span>
-                {currentOverride?.reason && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-300 border border-red-800">
-                    Reason: {currentOverride.reason}
+                {isAllDayClosed ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-600 text-white">
+                    ALL DAY CLOSED
+                  </span>
+                ) : (
+                  <span className="text-xs text-neutral-400">
+                    ({formatDateToDayName(selectedDate)})
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-neutral-400">
-                Instantly shut down or re-open online bookings for Lunch or Dinner on this date at will.
+              <p className="text-xs text-neutral-300 mt-0.5">
+                {currentOverride?.reason ? (
+                  <span className="text-red-300 font-semibold">Closure Reason: &ldquo;{currentOverride.reason}&rdquo;</span>
+                ) : (
+                  'Toggle online reservations open or shut for this date instantly.'
+                )}
               </p>
             </div>
           </div>
 
-          {/* Granular Shift Switches */}
+          {/* Granular Shift Kill Switches */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Lunch Switch */}
+            {/* Lunch Toggle */}
             <div className="flex items-center gap-2 p-2 bg-neutral-900 rounded-xl border border-white/10">
               <span className="text-xs font-bold text-amber-400">Lunch:</span>
               <button
                 type="button"
                 onClick={() => handleToggleShiftClosure('lunch', !isLunchClosed)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   isLunchClosed
                     ? 'bg-red-600 text-white shadow-md'
                     : 'bg-emerald-600 text-neutral-950'
@@ -551,23 +678,23 @@ export function ServiceDashboard({
               >
                 {isLunchClosed ? (
                   <>
-                    <Lock className="w-3 h-3" /> SHUT
+                    <Lock className="w-3.5 h-3.5" /> SHUT
                   </>
                 ) : (
                   <>
-                    <Unlock className="w-3 h-3" /> OPEN
+                    <Unlock className="w-3.5 h-3.5" /> OPEN
                   </>
                 )}
               </button>
             </div>
 
-            {/* Dinner Switch */}
+            {/* Dinner Toggle */}
             <div className="flex items-center gap-2 p-2 bg-neutral-900 rounded-xl border border-white/10">
               <span className="text-xs font-bold text-sky-400">Dinner:</span>
               <button
                 type="button"
                 onClick={() => handleToggleShiftClosure('dinner', !isDinnerClosed)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   isDinnerClosed
                     ? 'bg-red-600 text-white shadow-md'
                     : 'bg-emerald-600 text-neutral-950'
@@ -575,15 +702,36 @@ export function ServiceDashboard({
               >
                 {isDinnerClosed ? (
                   <>
-                    <Lock className="w-3 h-3" /> SHUT
+                    <Lock className="w-3.5 h-3.5" /> SHUT
                   </>
                 ) : (
                   <>
-                    <Unlock className="w-3 h-3" /> OPEN
+                    <Unlock className="w-3.5 h-3.5" /> OPEN
                   </>
                 )}
               </button>
             </div>
+
+            {/* All Day Shut Toggle */}
+            <button
+              type="button"
+              onClick={() => handleToggleShiftClosure('allDay', !isAllDayClosed)}
+              className={`min-h-[42px] px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                isAllDayClosed
+                  ? 'bg-emerald-600 text-neutral-950 border-emerald-400'
+                  : 'bg-red-950 text-red-300 border-red-700 hover:bg-red-900'
+              }`}
+            >
+              {isAllDayClosed ? (
+                <>
+                  <Unlock className="w-3.5 h-3.5" /> Re-Open All Day
+                </>
+              ) : (
+                <>
+                  <Ban className="w-3.5 h-3.5" /> Shut All Day
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -688,7 +836,7 @@ export function ServiceDashboard({
           <div className="p-12 text-center text-neutral-400">
             <AlertTriangle className="w-8 h-8 mx-auto text-neutral-600 mb-2" />
             <p className="text-sm font-semibold text-neutral-300">No reservations found for {selectedDate}</p>
-            <p className="text-xs text-neutral-500 mt-1">Use the Walk-In button above to seat guests on the fly or pick another date.</p>
+            <p className="text-xs text-neutral-500 mt-1">Use the Walk-In button above to seat guests on the fly or select another date.</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
@@ -790,14 +938,14 @@ export function ServiceDashboard({
         )}
       </div>
 
-      {/* SHUT SHIFT / CUSTOM BLACKOUT MODAL */}
+      {/* SHUT SHIFT / CUSTOM BLACKOUT MODAL WITH DIRECT DATE PICKER */}
       {isBlackoutModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-neutral-900 border border-white/15 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <h3 className="text-lg font-bold text-white">Shut Down Service for {selectedDate}</h3>
-                <p className="text-xs text-neutral-400">Block online bookings for this date/shift</p>
+                <h3 className="text-lg font-bold text-white">Shut Down Online Bookings</h3>
+                <p className="text-xs text-neutral-400">Block online reservations for any specific date & shift</p>
               </div>
               <button
                 type="button"
@@ -809,15 +957,57 @@ export function ServiceDashboard({
             </div>
 
             <form onSubmit={handleConfirmCustomBlackout} className="space-y-4">
+              {/* Target Date Input */}
               <div>
                 <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
-                  Select Service to Shut Down
+                  Target Date (UK DD/MM/YYYY) *
+                </label>
+                <div className="relative">
+                  <CalendarIcon className="w-4 h-4 text-emerald-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="text"
+                    required
+                    value={blackoutDate}
+                    onChange={(e) => setBlackoutDate(e.target.value)}
+                    placeholder="e.g. 05/09/2026"
+                    className="w-full min-h-[44px] pl-10 pr-4 bg-neutral-950 border border-white/15 rounded-xl text-sm font-mono text-white focus:border-amber-400"
+                  />
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setBlackoutDate(getTodayUKFormatted())}
+                    className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-[11px] text-neutral-300 rounded"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBlackoutDate(addDaysUK(getTodayUKFormatted(), 1))}
+                    className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-[11px] text-neutral-300 rounded"
+                  >
+                    Tomorrow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBlackoutDate('05/09/2026')}
+                    className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-[11px] text-emerald-400 font-mono rounded"
+                  >
+                    05/09/2026
+                  </button>
+                </div>
+              </div>
+
+              {/* Service Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
+                  Service to Shut Down
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
+                    { id: 'allDay', label: 'All Day' },
                     { id: 'lunch', label: 'Lunch Only' },
-                    { id: 'dinner', label: 'Dinner Only' },
-                    { id: 'allDay', label: 'All Day' }
+                    { id: 'dinner', label: 'Dinner Only' }
                   ].map((opt) => (
                     <button
                       key={opt.id}
@@ -825,7 +1015,7 @@ export function ServiceDashboard({
                       onClick={() => setBlackoutShift(opt.id as any)}
                       className={`min-h-[44px] rounded-xl text-xs font-bold border transition cursor-pointer ${
                         blackoutShift === opt.id
-                          ? 'bg-amber-500 text-neutral-950 border-amber-400 font-black'
+                          ? 'bg-amber-500 text-neutral-950 border-amber-400 font-black shadow-md'
                           : 'bg-neutral-950 text-neutral-300 border-white/10 hover:bg-neutral-800'
                       }`}
                     >
@@ -835,9 +1025,10 @@ export function ServiceDashboard({
                 </div>
               </div>
 
+              {/* Reason */}
               <div>
                 <label className="block text-xs font-semibold text-neutral-200 mb-1.5">
-                  Reason (Displayed to Guests & Staff)
+                  Reason for Closure
                 </label>
                 <input
                   type="text"
@@ -849,18 +1040,20 @@ export function ServiceDashboard({
                 />
               </div>
 
-              <div className="p-3 bg-amber-950/40 rounded-xl border border-amber-500/30 text-xs text-amber-200 space-y-1">
+              <div className="p-3.5 bg-amber-950/40 rounded-xl border border-amber-500/30 text-xs text-amber-200 space-y-1">
                 <p className="font-semibold text-amber-100 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Instant Guest Widget Throttling
+                  <AlertCircle className="w-4 h-4" /> Immediate Guest Widget Blocking
                 </p>
-                <p>New reservations for this shift on {selectedDate} will be instantly blocked on the guest widget with your specified reason.</p>
+                <p>
+                  Online reservations on <strong>{blackoutDate || selectedDate}</strong> will be locked immediately and the calendar will display a red &ldquo;SHUT&rdquo; badge.
+                </p>
               </div>
 
               <button
                 type="submit"
                 className="w-full min-h-[48px] bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm transition cursor-pointer shadow-lg shadow-red-950/50"
               >
-                Confirm Shift Shutdown
+                Confirm & Shut Down {blackoutShift === 'allDay' ? 'All Day' : blackoutShift.toUpperCase()} for {blackoutDate}
               </button>
             </form>
           </div>
@@ -874,7 +1067,7 @@ export function ServiceDashboard({
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-white">Scheduled Future Shift Closures</h3>
-                <p className="text-xs text-neutral-400">All dates with closed shifts</p>
+                <p className="text-xs text-neutral-400">Manage all closed dates & reopen at will</p>
               </div>
               <button
                 type="button"
