@@ -5,19 +5,33 @@ import { Header } from '@/components/Header';
 import { GuestBookingWidget } from '@/components/GuestBookingWidget';
 import { ServiceDashboard } from '@/components/ServiceDashboard';
 import { VenueSettingsView } from '@/components/VenueSettingsView';
+import { VenueAuthModal } from '@/components/VenueAuthModal';
 import { Footer } from '@/components/Footer';
 import { ComplianceModal } from '@/components/ComplianceModal';
 import { bookingService } from '@/lib/booking-service';
+import { authService, OperatorUser } from '@/lib/auth-service';
 import { Booking, VenueSettings } from '@/types/booking';
 import { DEFAULT_VENUE_SETTINGS } from '@/services/bookingMockService';
-import { CheckCircle2, Utensils, LayoutDashboard, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { CheckCircle2, Utensils, LayoutDashboard, Settings as SettingsIcon, Sparkles, Lock } from 'lucide-react';
 
 export default function Home() {
   const [activeView, setActiveView] = useState<'guest' | 'dashboard' | 'settings'>('guest');
   const [venueSettings, setVenueSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [operatorUser, setOperatorUser] = useState<OperatorUser | null>(null);
+
+  // Modals
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isComplianceOpen, setIsComplianceOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Subscribe to auth session
+  useEffect(() => {
+    const unsubscribe = authService.subscribe((user) => {
+      setOperatorUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Load initial settings and bookings
   const refreshData = useCallback(async () => {
@@ -60,6 +74,25 @@ export default function Home() {
     showToast('Reset to initial realistic UK seed bookings & settings');
   };
 
+  const handleViewChange = (view: 'guest' | 'dashboard' | 'settings') => {
+    if ((view === 'dashboard' || view === 'settings') && !operatorUser) {
+      setIsAuthOpen(true);
+      return;
+    }
+    setActiveView(view);
+  };
+
+  const handleAuthenticated = (user: OperatorUser) => {
+    setOperatorUser(user);
+    showToast(`Signed in as ${user.email}`);
+  };
+
+  const handleSignOut = async () => {
+    await authService.signOut();
+    setActiveView('guest');
+    showToast('Signed out of venue operator session');
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100 selection:bg-emerald-500 selection:text-neutral-950">
       {/* Toast Notification */}
@@ -73,10 +106,13 @@ export default function Home() {
       {/* Global Navigation Header */}
       <Header
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={handleViewChange}
         onResetDemo={handleResetDemo}
         onOpenCompliance={() => setIsComplianceOpen(true)}
+        onOpenLogin={() => setIsAuthOpen(true)}
+        onSignOut={handleSignOut}
         venueSettings={venueSettings}
+        operatorUser={operatorUser}
       />
 
       {/* Main Container */}
@@ -97,7 +133,7 @@ export default function Home() {
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => setActiveView('guest')}
+              onClick={() => handleViewChange('guest')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'guest'
                   ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50 shadow-sm'
@@ -109,7 +145,7 @@ export default function Home() {
             <span className="text-neutral-700 hidden sm:inline">•</span>
             <button
               type="button"
-              onClick={() => setActiveView('dashboard')}
+              onClick={() => handleViewChange('dashboard')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'dashboard'
                   ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50 shadow-sm'
@@ -117,11 +153,12 @@ export default function Home() {
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" /> 2. Operator FOH Live
+              {!operatorUser && <Lock className="w-3 h-3 text-amber-400 inline" />}
             </button>
             <span className="text-neutral-700 hidden sm:inline">•</span>
             <button
               type="button"
-              onClick={() => setActiveView('settings')}
+              onClick={() => handleViewChange('settings')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'settings'
                   ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50 shadow-sm'
@@ -129,6 +166,7 @@ export default function Home() {
               }`}
             >
               <SettingsIcon className="w-3.5 h-3.5" /> 3. Venue Settings
+              {!operatorUser && <Lock className="w-3 h-3 text-amber-400 inline" />}
             </button>
           </div>
         </div>
@@ -143,7 +181,7 @@ export default function Home() {
           </div>
         )}
 
-        {activeView === 'dashboard' && (
+        {activeView === 'dashboard' && operatorUser && (
           <div className="transition-all duration-200">
             <ServiceDashboard
               initialBookings={bookings}
@@ -154,7 +192,7 @@ export default function Home() {
           </div>
         )}
 
-        {activeView === 'settings' && (
+        {activeView === 'settings' && operatorUser && (
           <div className="transition-all duration-200">
             <VenueSettingsView
               initialSettings={venueSettings}
@@ -163,6 +201,13 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Operator Authentication Modal */}
+      <VenueAuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthenticated={handleAuthenticated}
+      />
 
       {/* Compliance Modal */}
       <ComplianceModal

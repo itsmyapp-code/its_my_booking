@@ -20,7 +20,11 @@ import {
   Eye, 
   Sliders,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  Link,
+  Code,
+  Check
 } from 'lucide-react';
 import { VenueSettings, DayOfWeek, WeeklySchedule } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
@@ -251,6 +255,53 @@ export function VenueSettingsView({ initialSettings, onSettingsSaved }: VenueSet
             </>
           )}
         </button>
+      </div>
+
+      {/* Direct Booking Link & Embed Code Banner */}
+      <div className="p-4 bg-neutral-900 border border-emerald-500/30 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Link className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-bold text-white uppercase tracking-wider">
+              Your Public Booking URL for Guests & Website Link
+            </span>
+          </div>
+          <p className="text-xs text-neutral-400">
+            Publish this direct link on your website (e.g. &ldquo;Book a Table&rdquo; button), Google Business Profile, and Instagram bio.
+          </p>
+          <div className="pt-1">
+            <code className="text-xs font-mono px-3 py-1.5 bg-neutral-950 text-emerald-300 rounded-lg border border-white/10 select-all block sm:inline-block">
+              {typeof window !== 'undefined' ? `${window.location.origin}/?venue=${initialSettings.venueId}` : `https://itsmybooking.co.uk/?venue=${initialSettings.venueId}`}
+            </code>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              const url = typeof window !== 'undefined' ? `${window.location.origin}/?venue=${initialSettings.venueId}` : `https://itsmybooking.co.uk/?venue=${initialSettings.venueId}`;
+              navigator.clipboard.writeText(url);
+              alert('Copied direct booking link to clipboard!');
+            }}
+            className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md"
+          >
+            <Copy className="w-3.5 h-3.5" /> Copy Booking Link
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const url = typeof window !== 'undefined' ? `${window.location.origin}/?venue=${initialSettings.venueId}` : `https://itsmybooking.co.uk/?venue=${initialSettings.venueId}`;
+              const embed = `<iframe src="${url}" width="100%" height="750" frameborder="0" style="border-radius: 16px;"></iframe>`;
+              navigator.clipboard.writeText(embed);
+              alert('Copied iframe embed code to clipboard!');
+            }}
+            className="px-3 py-2 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-semibold rounded-xl text-xs border border-white/10 transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Code className="w-3.5 h-3.5" /> Copy Embed HTML
+          </button>
+        </div>
       </div>
 
       {/* Tabs Navigation */}

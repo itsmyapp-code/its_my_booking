@@ -1,15 +1,29 @@
 'use client';
 
 import React from 'react';
-import { UtensilsCrossed, LayoutDashboard, Settings as SettingsIcon, ShieldCheck, RotateCcw } from 'lucide-react';
+import { 
+  UtensilsCrossed, 
+  LayoutDashboard, 
+  Settings as SettingsIcon, 
+  ShieldCheck, 
+  RotateCcw,
+  User,
+  LogOut,
+  Lock,
+  Sparkles
+} from 'lucide-react';
 import { VenueSettings } from '@/types/booking';
+import { OperatorUser } from '@/lib/auth-service';
 
 interface HeaderProps {
   activeView: 'guest' | 'dashboard' | 'settings';
   onViewChange: (view: 'guest' | 'dashboard' | 'settings') => void;
   onResetDemo: () => void;
   onOpenCompliance: () => void;
+  onOpenLogin: () => void;
+  onSignOut: () => void;
   venueSettings: VenueSettings;
+  operatorUser: OperatorUser | null;
 }
 
 export function Header({
@@ -17,7 +31,10 @@ export function Header({
   onViewChange,
   onResetDemo,
   onOpenCompliance,
-  venueSettings
+  onOpenLogin,
+  onSignOut,
+  venueSettings,
+  operatorUser
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-40 w-full bg-neutral-950/90 backdrop-blur-md border-b border-white/10">
@@ -51,7 +68,7 @@ export function Header({
             </div>
           </div>
 
-          {/* View Switcher Tabs (Guest vs Dashboard vs Settings) */}
+          {/* View Switcher Tabs */}
           <div className="flex items-center bg-neutral-900 p-1 rounded-xl border border-white/10">
             <button
               type="button"
@@ -77,6 +94,7 @@ export function Header({
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
               <span>Operator</span> <span className="hidden md:inline">FOH</span>
+              {!operatorUser && <Lock className="w-2.5 h-2.5 text-amber-400 opacity-80" />}
             </button>
 
             <button
@@ -90,29 +108,51 @@ export function Header({
             >
               <SettingsIcon className="w-3.5 h-3.5" />
               <span>Settings</span>
+              {!operatorUser && <Lock className="w-2.5 h-2.5 text-amber-400 opacity-80" />}
             </button>
           </div>
 
-          {/* Right Status & Actions */}
+          {/* Right Operator Authentication & Tools */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenCompliance}
-              className="min-h-[38px] px-2.5 sm:px-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-semibold rounded-xl border border-white/10 transition flex items-center gap-1.5 cursor-pointer"
-              title="UK GDPR & WCAG Compliance Details"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">UK GDPR</span>
-            </button>
+            {operatorUser ? (
+              <div className="flex items-center gap-2 bg-neutral-900 p-1 pl-3 rounded-xl border border-white/10">
+                <div className="text-right hidden xl:block">
+                  <span className="text-[10px] text-emerald-400 font-bold block uppercase">
+                    {operatorUser.isDemo ? 'Demo Manager' : 'Operator'}
+                  </span>
+                  <span className="text-xs font-semibold text-neutral-200 truncate max-w-[140px] block">
+                    {operatorUser.email}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="min-h-[34px] px-2.5 bg-neutral-800 hover:bg-red-950 hover:text-red-300 text-neutral-300 text-xs font-semibold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                  title="Sign out of venue session"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenLogin}
+                className="min-h-[38px] px-3 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Operator Login</span>
+              </button>
+            )}
 
             <button
               type="button"
-              onClick={onResetDemo}
-              className="min-h-[38px] px-2.5 sm:px-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-amber-300 text-xs font-medium rounded-xl border border-white/10 transition flex items-center gap-1.5 cursor-pointer"
-              title="Reset initial seed bookings"
+              onClick={onOpenCompliance}
+              className="min-h-[38px] px-2.5 sm:px-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-semibold rounded-xl border border-white/10 transition hidden sm:flex items-center gap-1.5 cursor-pointer"
+              title="UK GDPR & WCAG Compliance Details"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Reset Seed</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden lg:inline">UK GDPR</span>
             </button>
           </div>
         </div>
