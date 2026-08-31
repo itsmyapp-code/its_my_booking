@@ -68,49 +68,49 @@ export function Header({
             </div>
           </div>
 
-          {/* View Switcher Tabs */}
-          <div className="flex items-center bg-neutral-900 p-1 rounded-xl border border-white/10">
-            <button
-              type="button"
-              onClick={() => onViewChange('guest')}
-              className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeView === 'guest'
-                  ? 'bg-emerald-500 text-neutral-950 shadow-md'
-                  : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
-              }`}
-            >
-              <UtensilsCrossed className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Guest</span> Booking
-            </button>
+          {/* View Switcher Tabs - Only visible to authenticated operators */}
+          {operatorUser && (
+            <div className="flex items-center bg-neutral-900 p-1 rounded-xl border border-white/10">
+              <button
+                type="button"
+                onClick={() => onViewChange('guest')}
+                className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeView === 'guest'
+                    ? 'bg-emerald-500 text-neutral-950 shadow-md'
+                    : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                }`}
+              >
+                <UtensilsCrossed className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Guest</span> Booking
+              </button>
 
-            <button
-              type="button"
-              onClick={() => onViewChange('dashboard')}
-              className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeView === 'dashboard'
-                  ? 'bg-emerald-500 text-neutral-950 shadow-md'
-                  : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Operator</span> <span className="hidden md:inline">FOH</span>
-              {!operatorUser && <Lock className="w-2.5 h-2.5 text-amber-400 opacity-80" />}
-            </button>
+              <button
+                type="button"
+                onClick={() => onViewChange('dashboard')}
+                className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeView === 'dashboard'
+                    ? 'bg-emerald-500 text-neutral-950 shadow-md'
+                    : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                }`}
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>Operator</span> <span className="hidden md:inline">FOH</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => onViewChange('settings')}
-              className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeView === 'settings'
-                  ? 'bg-emerald-500 text-neutral-950 shadow-md'
-                  : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
-              }`}
-            >
-              <SettingsIcon className="w-3.5 h-3.5" />
-              <span>Settings</span>
-              {!operatorUser && <Lock className="w-2.5 h-2.5 text-amber-400 opacity-80" />}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => onViewChange('settings')}
+                className={`min-h-[38px] px-3 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeView === 'settings'
+                    ? 'bg-emerald-500 text-neutral-950 shadow-md'
+                    : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                }`}
+              >
+                <SettingsIcon className="w-3.5 h-3.5" />
+                <span>Settings</span>
+              </button>
+            </div>
+          )}
 
           {/* Right Operator Authentication & Tools */}
           <div className="flex items-center gap-2">
