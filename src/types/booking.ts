@@ -29,11 +29,59 @@ export interface Booking {
   complianceConsent: ComplianceConsent;
 }
 
+export interface UKAddress {
+  line1: string;
+  line2?: string;
+  city: string;
+  county?: string;
+  postalCode: string; // UK Postcode format
+  country: string;
+}
+
+export interface DayOpeningHours {
+  isOpen: boolean;
+  lunch: {
+    enabled: boolean;
+    start: string;
+    end: string;
+  };
+  dinner: {
+    enabled: boolean;
+    start: string;
+    end: string;
+  };
+}
+
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface WeeklySchedule {
+  monday: DayOpeningHours;
+  tuesday: DayOpeningHours;
+  wednesday: DayOpeningHours;
+  thursday: DayOpeningHours;
+  friday: DayOpeningHours;
+  saturday: DayOpeningHours;
+  sunday: DayOpeningHours;
+}
+
+export interface VenuePolicies {
+  dogFriendlyNotice?: string;
+  highchairNotice?: string;
+  cancellationCutoffHours?: number;
+  depositRequired?: boolean;
+  depositAmountPerCover?: number;
+  specialDietaryNotice?: string;
+}
+
 export interface VenueSettings {
   venueId: string;
-  venueName?: string;
-  phone?: string;
-  address?: string;
+  venueName: string;
+  tagline?: string;
+  logoUrl?: string;
+  phone: string; // UK format
+  email: string;
+  website?: string;
+  address: UKAddress;
   isOnlineBookingEnabled: boolean; // Master Kill Switch
   maxCoversPerShift: {
     lunch: number;
@@ -44,6 +92,8 @@ export interface VenueSettings {
     lunch: { start: string; end: string };
     dinner: { start: string; end: string };
   };
+  schedule?: WeeklySchedule;
+  policies?: VenuePolicies;
 }
 
 export interface SlotAvailability {

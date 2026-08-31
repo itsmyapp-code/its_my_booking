@@ -4,15 +4,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/Header';
 import { GuestBookingWidget } from '@/components/GuestBookingWidget';
 import { ServiceDashboard } from '@/components/ServiceDashboard';
+import { VenueSettingsView } from '@/components/VenueSettingsView';
 import { Footer } from '@/components/Footer';
 import { ComplianceModal } from '@/components/ComplianceModal';
 import { bookingService } from '@/lib/booking-service';
 import { Booking, VenueSettings } from '@/types/booking';
 import { DEFAULT_VENUE_SETTINGS } from '@/services/bookingMockService';
-import { CheckCircle2, Utensils, LayoutDashboard, Shield, Sparkles } from 'lucide-react';
+import { CheckCircle2, Utensils, LayoutDashboard, Settings as SettingsIcon, Sparkles } from 'lucide-react';
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<'guest' | 'dashboard'>('guest');
+  const [activeView, setActiveView] = useState<'guest' | 'dashboard' | 'settings'>('guest');
   const [venueSettings, setVenueSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isComplianceOpen, setIsComplianceOpen] = useState<boolean>(false);
@@ -50,13 +51,13 @@ export default function Home() {
   const handleSettingsUpdated = (newSettings: VenueSettings) => {
     setVenueSettings(newSettings);
     refreshData();
-    showToast(newSettings.isOnlineBookingEnabled ? 'Online bookings enabled' : 'Online bookings paused');
+    showToast(`Updated venue profile: ${newSettings.venueName}`);
   };
 
   const handleResetDemo = () => {
     bookingService.resetDemoData();
     refreshData();
-    showToast('Reset to initial realistic UK seed bookings');
+    showToast('Reset to initial realistic UK seed bookings & settings');
   };
 
   return (
@@ -75,7 +76,7 @@ export default function Home() {
         onViewChange={setActiveView}
         onResetDemo={handleResetDemo}
         onOpenCompliance={() => setIsComplianceOpen(true)}
-        isOnlineBookingEnabled={venueSettings.isOnlineBookingEnabled}
+        venueSettings={venueSettings}
       />
 
       {/* Main Container */}
@@ -92,49 +93,72 @@ export default function Home() {
             100% Client-Side Next.js • Firebase Client SDK • UK GDPR 30-Day Purge Retention • Zero Tracking Cookies
           </p>
 
-          {/* Quick Toggle pill for testing */}
-          <div className="mt-4 flex items-center justify-center gap-2">
+          {/* Quick 3-Way Mode Toggle */}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => setActiveView('guest')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'guest'
-                  ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50'
-                  : 'text-neutral-500 hover:text-neutral-300'
+                  ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50 shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <Utensils className="w-3.5 h-3.5" /> 1. Guest Booking Flow
+              <Utensils className="w-3.5 h-3.5" /> 1. Guest Booking
             </button>
-            <span className="text-neutral-600">•</span>
+            <span className="text-neutral-700 hidden sm:inline">•</span>
             <button
               type="button"
               onClick={() => setActiveView('dashboard')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'dashboard'
-                  ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50'
-                  : 'text-neutral-500 hover:text-neutral-300'
+                  ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50 shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <LayoutDashboard className="w-3.5 h-3.5" /> 2. Operator FOH Live Dashboard
+              <LayoutDashboard className="w-3.5 h-3.5" /> 2. Operator FOH Live
+            </button>
+            <span className="text-neutral-700 hidden sm:inline">•</span>
+            <button
+              type="button"
+              onClick={() => setActiveView('settings')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeView === 'settings'
+                  ? 'bg-neutral-800 text-emerald-400 border border-emerald-500/50 shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <SettingsIcon className="w-3.5 h-3.5" /> 3. Venue Settings
             </button>
           </div>
         </div>
 
         {/* View Switcher Container */}
-        {activeView === 'guest' ? (
+        {activeView === 'guest' && (
           <div className="transition-all duration-200">
             <GuestBookingWidget
               venueSettings={venueSettings}
               onBookingCreated={handleBookingCreated}
             />
           </div>
-        ) : (
+        )}
+
+        {activeView === 'dashboard' && (
           <div className="transition-all duration-200">
             <ServiceDashboard
               initialBookings={bookings}
               venueSettings={venueSettings}
               onSettingsUpdated={handleSettingsUpdated}
               onBookingsUpdated={refreshData}
+            />
+          </div>
+        )}
+
+        {activeView === 'settings' && (
+          <div className="transition-all duration-200">
+            <VenueSettingsView
+              initialSettings={venueSettings}
+              onSettingsSaved={handleSettingsUpdated}
             />
           </div>
         )}

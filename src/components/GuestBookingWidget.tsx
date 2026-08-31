@@ -19,12 +19,13 @@ import {
   Utensils, 
   Sparkles,
   Printer,
-  CalendarPlus,
-  RefreshCw
+  MapPin,
+  RefreshCw,
+  Building2
 } from 'lucide-react';
 import { Booking, VenueSettings, SlotAvailability } from '@/types/booking';
 import { bookingService } from '@/lib/booking-service';
-import { getTodayUKFormatted, formatUKDate, parseUKDate, isPastUKDate, validateUKPhone } from '@/lib/date-utils';
+import { getTodayUKFormatted, formatUKDate, isPastUKDate, validateUKPhone } from '@/lib/date-utils';
 
 interface GuestBookingWidgetProps {
   venueSettings: VenueSettings;
@@ -65,9 +66,8 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Find next Friday & Saturday
     const nextFriday = new Date(today);
-    const dayOfWeek = today.getDay(); // 0 is Sun, 5 is Fri, 6 is Sat
+    const dayOfWeek = today.getDay();
     const daysUntilFri = (5 + 7 - dayOfWeek) % 7 || 7;
     nextFriday.setDate(today.getDate() + daysUntilFri);
 
@@ -97,6 +97,12 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
     if (dietaryRequirements.includes(chip)) return;
     setDietaryRequirements((prev) => (prev ? `${prev}, ${chip}` : chip));
   };
+
+  // Formatted address string
+  const formattedAddress = useMemo(() => {
+    const { line1, city, postalCode } = venueSettings.address;
+    return `${line1}, ${city} ${postalCode}`;
+  }, [venueSettings.address]);
 
   // Step 1 Validation & Navigation
   const handleProceedToStep2 = () => {
@@ -222,25 +228,40 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
 
   return (
     <div className="w-full max-w-xl mx-auto bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-neutral-100">
-      {/* Header & Venue Banner */}
+      {/* Header & Venue Branding Banner */}
       <div className="bg-neutral-950 p-5 sm:p-6 border-b border-white/10">
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
-              <Sparkles className="w-3 h-3" /> Live Booking Engine
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1.5">
-              {venueSettings.venueName || 'The Royal Oak Gastropub'}
-            </h1>
-            <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
-              {venueSettings.address || 'Richmond, London'} • Currency: GBP (£)
-            </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {venueSettings.logoUrl ? (
+              <img
+                src={venueSettings.logoUrl}
+                alt={venueSettings.venueName}
+                className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-md shrink-0"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                <Building2 className="w-6 h-6" />
+              </div>
+            )}
+            <div>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
+                <Sparkles className="w-2.5 h-2.5" /> Instant Table Confirmation
+              </span>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1">
+                {venueSettings.venueName || 'The Royal Oak Gastropub'}
+              </h1>
+              <p className="text-xs text-neutral-400 flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span>{formattedAddress}</span>
+              </p>
+            </div>
           </div>
-          <div className="hidden sm:block text-right">
-            <span className="text-xs text-neutral-400 block">Need assistance?</span>
+
+          <div className="text-right shrink-0">
+            <span className="text-[11px] text-neutral-400 block">Enquiries</span>
             <a 
               href={`tel:${venueSettings.phone || '+442079460991'}`} 
-              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline"
+              className="text-xs font-bold text-emerald-400 hover:text-emerald-300 underline font-mono"
             >
               {venueSettings.phone || '+44 20 7946 0991'}
             </a>
@@ -286,14 +307,14 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
               <span className="text-xs text-neutral-400">1 to 6 covers online</span>
             </label>
 
-            {/* Interactive Covers Grid (Mobile-first min 44px touch targets) */}
+            {/* Interactive Covers Grid */}
             <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
               {[1, 2, 3, 4, 5, 6].map((num) => (
                 <button
                   key={num}
                   type="button"
                   onClick={() => setPartySize(num)}
-                  className={`min-h-[48px] rounded-xl text-base font-bold transition-all flex items-center justify-center border ${
+                  className={`min-h-[48px] rounded-xl text-base font-bold transition-all flex items-center justify-center border cursor-pointer ${
                     partySize === num
                       ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-lg shadow-emerald-950/50 scale-[1.02]'
                       : 'bg-neutral-800 text-neutral-200 border-white/10 hover:bg-neutral-750 hover:border-white/20'
@@ -306,7 +327,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
               <button
                 type="button"
                 onClick={() => setPartySize(7)}
-                className={`min-h-[48px] rounded-xl text-sm font-bold transition-all flex items-center justify-center border col-span-2 sm:col-span-1 ${
+                className={`min-h-[48px] rounded-xl text-sm font-bold transition-all flex items-center justify-center border col-span-2 sm:col-span-1 cursor-pointer ${
                   partySize >= 7
                     ? 'bg-amber-500 text-neutral-950 border-amber-400'
                     : 'bg-neutral-800 text-amber-300 border-amber-500/30 hover:bg-neutral-750'
@@ -323,7 +344,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
                 <div className="text-xs sm:text-sm text-amber-200">
                   <p className="font-semibold text-amber-100">Large Party Reservation (7+ Covers)</p>
                   <p className="mt-1 text-neutral-300">
-                    For groups of 7 or more, we require bespoke seating orchestration and pre-orders. Please speak directly to our Front of House team on:
+                    For groups of 7 or more, we require bespoke seating orchestration. Please speak directly to our team on:
                   </p>
                   <a
                     href={`tel:${venueSettings.phone || '+442079460991'}`}
@@ -352,7 +373,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
                   key={qd.label}
                   type="button"
                   onClick={() => setSelectedDate(qd.value)}
-                  className={`min-h-[44px] px-3 py-2 text-xs font-semibold rounded-xl border transition flex flex-col items-center justify-center ${
+                  className={`min-h-[44px] px-3 py-2 text-xs font-semibold rounded-xl border transition flex flex-col items-center justify-center cursor-pointer ${
                     selectedDate === qd.value
                       ? 'bg-emerald-500 text-neutral-950 border-emerald-400 font-bold shadow-md'
                       : 'bg-neutral-800 text-neutral-300 border-white/10 hover:bg-neutral-750'
@@ -364,7 +385,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
               ))}
             </div>
 
-            {/* Custom Date Input for Accessibility & Edge Cases */}
+            {/* Custom Date Input */}
             <div className="relative">
               <input
                 type="text"
@@ -404,7 +425,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
             <button
               type="button"
               onClick={() => setCurrentStep(1)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-400 hover:text-white transition py-1"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-400 hover:text-white transition py-1 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" /> Back to Date & Guests
             </button>
@@ -428,7 +449,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
                   key={mode}
                   type="button"
                   onClick={() => setServiceFilter(mode)}
-                  className={`min-h-[40px] px-3.5 py-1.5 text-xs font-semibold rounded-lg capitalize border transition ${
+                  className={`min-h-[40px] px-3.5 py-1.5 text-xs font-semibold rounded-lg capitalize border transition cursor-pointer ${
                     serviceFilter === mode
                       ? 'bg-neutral-100 text-neutral-950 border-white'
                       : 'bg-neutral-800 text-neutral-300 border-white/10 hover:bg-neutral-750'
@@ -460,7 +481,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
                       type="button"
                       disabled={!slot.isAvailable}
                       onClick={() => handleSelectSlot(slot)}
-                      className={`min-h-[50px] p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center ${
+                      className={`min-h-[50px] p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center cursor-pointer ${
                         isSelected
                           ? 'bg-emerald-500 text-neutral-950 border-emerald-400 shadow-md font-bold'
                           : slot.isAvailable
@@ -510,7 +531,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
             <button
               type="button"
               onClick={() => setCurrentStep(2)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-400 hover:text-white transition py-1"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-400 hover:text-white transition py-1 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" /> Change Time ({selectedSlot})
             </button>
@@ -602,7 +623,7 @@ export function GuestBookingWidget({ venueSettings, onBookingCreated }: GuestBoo
                     key={chip}
                     type="button"
                     onClick={() => handleAddDietaryChip(chip)}
-                    className="px-2.5 py-1 text-[11px] font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-md border border-white/10 transition"
+                    className="px-2.5 py-1 text-[11px] font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-md border border-white/10 transition cursor-pointer"
                   >
                     + {chip}
                   </button>

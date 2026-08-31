@@ -1,14 +1,63 @@
-import { Booking, BookingStatus, VenueSettings, SlotAvailability, DayCapacitySummary } from '@/types/booking';
-import { getTodayUKFormatted, parseUKDate, formatUKDate } from '@/lib/date-utils';
+import { Booking, BookingStatus, VenueSettings, SlotAvailability, DayCapacitySummary, WeeklySchedule } from '@/types/booking';
+import { getTodayUKFormatted } from '@/lib/date-utils';
 
 const STORAGE_KEY_BOOKINGS = 'itsmybooking_bookings_data_v1';
 const STORAGE_KEY_SETTINGS = 'itsmybooking_venue_settings_v1';
 
+export const DEFAULT_WEEKLY_SCHEDULE: WeeklySchedule = {
+  monday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '15:00' },
+    dinner: { enabled: true, start: '17:30', end: '22:00' }
+  },
+  tuesday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '15:00' },
+    dinner: { enabled: true, start: '17:30', end: '22:00' }
+  },
+  wednesday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '15:00' },
+    dinner: { enabled: true, start: '17:30', end: '22:00' }
+  },
+  thursday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '15:00' },
+    dinner: { enabled: true, start: '17:30', end: '22:00' }
+  },
+  friday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '15:00' },
+    dinner: { enabled: true, start: '17:30', end: '22:30' }
+  },
+  saturday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '15:30' },
+    dinner: { enabled: true, start: '17:00', end: '23:00' }
+  },
+  sunday: {
+    isOpen: true,
+    lunch: { enabled: true, start: '12:00', end: '16:00' },
+    dinner: { enabled: true, start: '17:00', end: '21:00' }
+  }
+};
+
 export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
   venueId: 'venue_uk_01',
   venueName: 'The Royal Oak Gastropub & Kitchen',
+  tagline: 'Modern British Gastronomy & Seasonal Local Fare',
+  logoUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=160&auto=format&fit=crop&q=80',
   phone: '+44 20 7946 0991',
-  address: '14 High Street, Richmond, London TW9 1ED',
+  email: 'reservations@theroyaloak-richmond.co.uk',
+  website: 'https://theroyaloak-richmond.co.uk',
+  address: {
+    line1: '14 High Street',
+    line2: 'Riverside Walk',
+    city: 'Richmond',
+    county: 'Greater London',
+    postalCode: 'TW9 1ED',
+    country: 'United Kingdom'
+  },
   isOnlineBookingEnabled: true,
   maxCoversPerShift: {
     lunch: 40,
@@ -18,12 +67,18 @@ export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
   serviceWindows: {
     lunch: { start: '12:00', end: '15:00' },
     dinner: { start: '17:30', end: '22:00' }
+  },
+  schedule: DEFAULT_WEEKLY_SCHEDULE,
+  policies: {
+    dogFriendlyNotice: 'Well-behaved dogs on leads are welcome in our bar and garden terrace areas.',
+    highchairNotice: 'Highchairs and booster seats are available on request during table booking.',
+    cancellationCutoffHours: 24,
+    depositRequired: false,
+    depositAmountPerCover: 0,
+    specialDietaryNotice: 'Please inform us of all allergies; our kitchen handles nuts, dairy, and gluten.'
   }
 };
 
-/**
- * Generate initial realistic seed data for immediate preview
- */
 export function generateSeedBookings(): Booking[] {
   const today = getTodayUKFormatted();
   
@@ -230,7 +285,15 @@ class BookingMockService {
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(DEFAULT_VENUE_SETTINGS));
         return DEFAULT_VENUE_SETTINGS;
       }
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Merge with defaults to guarantee all nested properties exist
+      return {
+        ...DEFAULT_VENUE_SETTINGS,
+        ...parsed,
+        address: { ...DEFAULT_VENUE_SETTINGS.address, ...(parsed.address || {}) },
+        schedule: { ...DEFAULT_WEEKLY_SCHEDULE, ...(parsed.schedule || {}) },
+        policies: { ...DEFAULT_VENUE_SETTINGS.policies, ...(parsed.policies || {}) }
+      };
     } catch {
       return DEFAULT_VENUE_SETTINGS;
     }
@@ -238,7 +301,23 @@ class BookingMockService {
 
   public updateVenueSettings(settings: Partial<VenueSettings>): VenueSettings {
     const current = this.getVenueSettings();
-    const updated = { ...current, ...settings };
+    const updated: VenueSettings = {
+      ...current,
+      ...settings,
+      address: {
+        ...current.address,
+        ...(settings.address || {})
+      },
+      schedule: {
+        ...(current.schedule || DEFAULT_WEEKLY_SCHEDULE),
+        ...(settings.schedule || {})
+      },
+      policies: {
+        ...(current.policies || DEFAULT_VENUE_SETTINGS.policies),
+        ...(settings.policies || {})
+      }
+    };
+
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(updated));
@@ -343,7 +422,6 @@ class BookingMockService {
     const activeBookings = this.getBookings(date).filter((b) => b.status !== 'cancelled');
     const slots: SlotAvailability[] = [];
 
-    // Helper to generate 15-min intervals
     const generateTimes = (startStr: string, endStr: string, service: 'lunch' | 'dinner') => {
       const [startHour, startMin] = startStr.split(':').map(Number);
       const [endHour, endMin] = endStr.split(':').map(Number);
@@ -356,12 +434,10 @@ class BookingMockService {
         const mm = String(current % 60).padStart(2, '0');
         const slotTime = `${hh}:${mm}`;
 
-        // Calculate covers already booked in this specific 15-min slot
         const slotCovers = activeBookings
           .filter((b) => b.timeSlot === slotTime)
           .reduce((sum, b) => sum + b.covers, 0);
 
-        // Calculate covers in the whole shift
         const shiftTotalCovers = activeBookings
           .filter((b) => b.service === service)
           .reduce((sum, b) => sum + b.covers, 0);
